@@ -1,0 +1,15 @@
+[package]
+name = "vkc"
+version = "0.0.1"
+authors = ["Nick Sanders <cogciprocate@gmail.com>"]
+description = "Vulkan Compute - a compute-specialized subset of the Vulkan API"
+# documentation = "https://doc.cogciprocate.com/vkc"
+homepage = "https://github.com/cogciprocate/vkc"
+repository = "https://github.com/cogciprocate/vkc"
+readme = "README.md"
+# keywords = ["vulkan", "gpu", "gpgpu", "async"]
+license = "MIT/Apache-2.0"
+exclude = ["target/*", "*.png", "bak/*"]
+# categories = ["asynchronous", "concurrency", "science", "api-bindings"]
+
+[dependencies]
