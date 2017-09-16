@@ -13,3 +13,6 @@ exclude = ["target/*", "*.png", "bak/*"]
 # categories = ["asynchronous", "concurrency", "science", "api-bindings"]
 
 [dependencies]
+vk-sys = "*"
+winit = "*"
+libloading = "*"
