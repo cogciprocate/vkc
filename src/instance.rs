@@ -1,9 +1,11 @@
+use std::sync::Arc;
 use std::ffi::{self, CStr};
 use std::ptr;
 use std::mem;
 use std::os::raw::{c_char, c_void};
 use vk;
 use loader::Loader;
+
 
 static VALIDATION_LAYERS: [&[u8]; 1] = [
     b"VK_LAYER_LUNARG_standard_validation\0"
@@ -30,12 +32,12 @@ extern "system" fn __debug_callback(_flags: vk::DebugReportFlagsEXT,
     vk::FALSE
 }
 
+
 fn create_debug_report_callback_ext(instance: &Instance,
         create_info: &vk::DebugReportCallbackCreateInfoEXT, allocator: vk::DebugReportCallbackEXT)
 {
-    let create_drcb = instance.get_instance_proc_addr(b"vkCreateDebugReportCallbackEXT");
+    let create_drcb = instance.get_instance_proc_addr(b"vkCreateDebugReportCallbackEXT".as_ptr() as *const i8);
 }
-
 
 unsafe fn check_validation_layer_support(loader: &Loader) -> bool {
     let mut layer_count = 0u32;
@@ -103,12 +105,18 @@ unsafe fn enumerate_physical_devices(instance: vk::Instance, vk: &vk::InstancePo
 }
 
 
-pub struct Instance {
-    pub instance: vk::Instance,
+pub struct Inner {
+    handle: vk::Instance,
     pub vk: vk::InstancePointers,
     loader: Loader,
     debug_callback: Option<vk::DebugReportCallbackEXT>,
     physical_devices: Vec<vk::PhysicalDevice>,
+}
+
+
+#[derive(Clone)]
+pub struct Instance {
+    inner: Arc<Inner>,
 }
 
 impl Instance {
@@ -141,12 +149,12 @@ impl Instance {
             ppEnabledExtensionNames:extension_names.as_ptr(),
         };
 
-        let mut instance = 0;
-        ::check(loader.entry_points().CreateInstance(&info, ptr::null(), &mut instance));
+        let mut handle = 0;
+        ::check(loader.entry_points().CreateInstance(&info, ptr::null(), &mut handle));
 
         // Function pointers:
         let vk = vk::InstancePointers::load(|name|
-            mem::transmute(loader.get_instance_proc_addr(instance, name.as_ptr())));
+            mem::transmute(loader.get_instance_proc_addr(handle, name.as_ptr())));
 
         let debug_callback = if ENABLE_VALIDATION_LAYERS {
             let create_info = vk::DebugReportCallbackCreateInfoEXT {
@@ -158,7 +166,7 @@ impl Instance {
             };
 
             let mut callback: vk::DebugReportCallbackEXT = 0;
-            if vk.CreateDebugReportCallbackEXT(instance, &create_info, ptr::null(), &mut callback) != vk::SUCCESS {
+            if vk.CreateDebugReportCallbackEXT(handle, &create_info, ptr::null(), &mut callback) != vk::SUCCESS {
                 panic!("failed to set up debug callback");
             } else {
                 println!("Debug report callback initialized.");
@@ -169,42 +177,50 @@ impl Instance {
         };
 
         // Device:
-        let physical_devices = enumerate_physical_devices(instance, &vk);
+        let physical_devices = enumerate_physical_devices(handle, &vk);
 
         Instance {
-            instance,
-            vk,
-            loader,
-            debug_callback,
-            physical_devices,
+            inner: Arc::new(Inner {
+                handle,
+                vk,
+                loader,
+                debug_callback,
+                physical_devices,
+            }),
         }
     }
 
     #[inline]
-    pub fn get_instance_proc_addr(&self, name: &[u8]) -> extern "system" fn() -> () {
-        self.loader.get_instance_proc_addr(self.instance, name.as_ptr() as *const i8)
+    pub fn vk(&self) -> &vk::InstancePointers {
+        &self.inner.vk
     }
 
     #[inline]
-    pub fn entry_points(&self) -> &vk::EntryPoints {
-        &self.loader.entry_points()
+    pub fn handle(&self) -> vk::Instance {
+        self.inner.handle
     }
 
+    #[inline]
+    pub fn get_instance_proc_addr(&self, name: *const i8) -> extern "system" fn() -> () {
+        self.inner.loader.get_instance_proc_addr(self.inner.handle, name)
+    }
+
+    #[inline]
     pub fn physical_devices(&self) -> &[vk::PhysicalDevice] {
-        self.physical_devices.as_slice()
+        self.inner.physical_devices.as_slice()
     }
 }
 
-impl Drop for Instance {
+impl Drop for Inner {
     fn drop(&mut self) {
         unsafe {
-            println!("Destroying debug report callback...");
+            println!("Destroying debug callback...");
             if let Some(callback) = self.debug_callback {
-                self.vk.DestroyDebugReportCallbackEXT(self.instance, callback, ptr::null());
+                self.vk.DestroyDebugReportCallbackEXT(self.handle, callback, ptr::null());
             }
 
             println!("Destroying instance...");
-            self.vk.DestroyInstance(self.instance, ptr::null());
+            self.vk.DestroyInstance(self.handle, ptr::null());
         }
     }
 }

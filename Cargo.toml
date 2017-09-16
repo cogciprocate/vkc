@@ -16,3 +16,4 @@ exclude = ["target/*", "*.png", "bak/*"]
 vk-sys = "*"
 winit = "*"
 libloading = "*"
+smallvec = "*"

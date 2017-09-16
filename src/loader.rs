@@ -4,11 +4,13 @@ use std::ptr;
 use lib;
 use vk;
 
+
 type ProcAddrFnSym<'lib> = lib::Symbol<'lib, extern "system" fn(instance: vk::Instance, pName: *const i8)
     -> extern "system" fn() -> ()>;
 
 type ProcAddrFnRaw = extern "system" fn(instance: vk::Instance, pName: *const i8)
     -> extern "system" fn() -> ();
+
 
 pub struct Loader {
     vk_lib: lib::Library,
