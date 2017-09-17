@@ -33,11 +33,11 @@ extern "system" fn __debug_callback(_flags: vk::DebugReportFlagsEXT,
 }
 
 
-fn create_debug_report_callback_ext(instance: &Instance,
-        create_info: &vk::DebugReportCallbackCreateInfoEXT, allocator: vk::DebugReportCallbackEXT)
-{
-    let create_drcb = instance.get_instance_proc_addr(b"vkCreateDebugReportCallbackEXT".as_ptr() as *const i8);
-}
+// fn create_debug_report_callback_ext(instance: &Instance,
+//         create_info: &vk::DebugReportCallbackCreateInfoEXT, allocator: vk::DebugReportCallbackEXT)
+// {
+//     let create_drcb = instance.get_instance_proc_addr(b"vkCreateDebugReportCallbackEXT".as_ptr() as *const i8);
+// }
 
 fn check_validation_layer_support(loader: &Loader, print: bool) -> bool {
     let mut layer_count = 0u32;

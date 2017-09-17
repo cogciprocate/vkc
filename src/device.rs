@@ -244,7 +244,7 @@ impl Device {
     }
 
     #[inline]
-    pub fn queue(&self, queue_family_index: u32, queue_index: u32) -> VkcResult<Queue> {
+    pub fn queue(&self, _queue_family_index: u32, _queue_index: u32) -> VkcResult<Queue> {
         Err(())
     }
 

@@ -45,6 +45,10 @@ impl ShaderModule {
     pub fn handle(&self) -> vk::ShaderModule {
         self.inner.handle
     }
+
+    pub fn device(&self) -> &Device {
+        &self.inner.device
+    }
 }
 
 impl Drop for Inner {

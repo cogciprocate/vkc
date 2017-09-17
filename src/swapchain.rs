@@ -211,6 +211,10 @@ impl Swapchain {
         vk::Extent2D { width: self.inner.extent.width, height: self.inner.extent.height }
     }
 
+    pub fn handle(&self) -> vk::ShaderModule {
+        self.inner.handle
+    }
+
     pub fn device(&self) -> &Device {
         &self.inner.device
     }

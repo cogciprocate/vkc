@@ -5,7 +5,7 @@ extern crate vkc;
 use std::ptr;
 use vkc::winit::{EventsLoop, WindowBuilder, Window, ControlFlow, Event, WindowEvent};
 use vkc::{vk, device, Version, Instance, Device, Surface, Swapchain, ImageView,
-    PipelineLayout};
+    PipelineLayout, RenderPass, GraphicsPipeline};
 
 fn main() {
     unsafe {
@@ -48,7 +48,9 @@ struct App {
     surface: Surface,
     swapchain: Swapchain,
     image_views: Vec<ImageView>,
+    render_pass: RenderPass,
     pipeline_layout: PipelineLayout,
+    graphics_pipeline: GraphicsPipeline,
 }
 
 impl App {
@@ -61,7 +63,10 @@ impl App {
         let device = Device::new(instance.clone(), &surface, physical_device, vk::QUEUE_GRAPHICS_BIT);
         let swapchain = Swapchain::new(surface.clone(), device.clone(), vk::QUEUE_GRAPHICS_BIT);
         let image_views = vkc::create_image_views(&swapchain);
-        let pipeline_layout = PipelineLayout::new(device.clone(), swapchain.extent());
+        let render_pass = RenderPass::new(device.clone(), swapchain.image_format());
+        let pipeline_layout = PipelineLayout::new(device.clone());
+        let graphics_pipeline = GraphicsPipeline::new(device.clone(), &pipeline_layout,
+            &render_pass, swapchain.extent());
 
         App {
             instance,
@@ -71,7 +76,9 @@ impl App {
             surface: surface,
             swapchain,
             image_views,
+            render_pass,
             pipeline_layout,
+            graphics_pipeline,
         }
     }
 
