@@ -1,14 +1,22 @@
 use std::os::raw::c_void;
 use std::ptr;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use winit;
 use vk;
 use ::{Instance};
 
-pub struct Surface {
+
+#[derive(Debug)]
+struct Inner {
     handle: vk::SurfaceKHR,
     instance: Instance,
     active: AtomicBool,
+}
+
+#[derive(Debug, Clone)]
+pub struct Surface {
+    inner: Arc<Inner>,
 }
 
 impl Surface {
@@ -30,18 +38,20 @@ impl Surface {
         }
 
         Surface {
-            handle: handle,
-            instance: instance,
-            active: AtomicBool::new(false),
+            inner: Arc::new(Inner {
+                handle: handle,
+                instance: instance,
+                active: AtomicBool::new(false),
+            })
         }
     }
 
     pub fn handle(&self) -> vk::SurfaceKHR {
-        self.handle
+        self.inner.handle
     }
 }
 
-impl Drop for Surface {
+impl Drop for Inner {
     fn drop(&mut self) {
         unsafe {
             println!("Destroying surface...");

@@ -1,6 +1,7 @@
 use std::ffi::OsStr;
 use std::mem;
 use std::ptr;
+use std::fmt;
 use lib;
 use vk;
 
@@ -52,4 +53,10 @@ impl Loader {
         &self.entry_points
     }
 
+}
+
+impl fmt::Debug for Loader {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Loader")
+    }
 }

@@ -1,9 +1,69 @@
 use std::sync::Arc;
 use std::mem;
 use std::ptr;
+use std::ffi::CStr;
+use std::os::raw::c_char;
 use vk;
-use ::{VkcResult, Instance, Surface};
+use ::{VkcResult, Instance, Surface, SwapchainSupportDetails};
 use queue::{self, Queue};
+use instance;
+
+
+static REQUIRED_EXTENSIONS: [&[u8]; 1] = [
+    b"VK_KHR_swapchain\0",
+];
+
+// bool checkDeviceExtensionSupport(VkPhysicalDevice device) {
+//     uint32_t extensionCount;
+//     vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+
+//     std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+//     vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+//     std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
+
+//     for (const auto& extension : availableExtensions) {
+//         requiredExtensions.erase(extension.extensionName);
+//     }
+
+//     return requiredExtensions.empty();
+// }
+
+fn check_device_extension_support(instance: &Instance, device: vk::PhysicalDevice) -> bool {
+    let mut avail_ext_count = 0u32;
+    let mut avail_exts: Vec<vk::ExtensionProperties>;
+    unsafe {
+        ::check(instance.vk().EnumerateDeviceExtensionProperties(device, ptr::null(),
+            &mut avail_ext_count, ptr::null_mut()));
+        avail_exts = Vec::with_capacity(avail_ext_count as usize);
+        avail_exts.set_len(avail_ext_count as usize);
+        ::check(instance.vk().EnumerateDeviceExtensionProperties(device, ptr::null(),
+            &mut avail_ext_count, avail_exts.as_mut_ptr()));
+
+        // Print available:
+        for ext in &avail_exts {
+                let name = (&ext.extensionName) as *const c_char;
+                println!("Available device extension: '{}' (version: {})",
+                    CStr::from_ptr(name).to_str().unwrap(), ext.specVersion);
+        };
+
+        for reqd_ext_name in &REQUIRED_EXTENSIONS[..] {
+            let mut ext_avail = false;
+            for avail_ext in &avail_exts {
+                if CStr::from_ptr(reqd_ext_name.as_ptr() as *const c_char) ==
+                    CStr::from_ptr(avail_ext.extensionName.as_ptr())
+                {
+                    println!("Required device extension available: '{}'",
+                        CStr::from_ptr(reqd_ext_name.as_ptr() as *const c_char).to_str().unwrap());
+                    ext_avail = true;
+                    break;
+                }
+            }
+            if !ext_avail { return false; }
+        }
+    }
+    true
+}
 
 unsafe fn device_is_suitable(instance: &Instance, surface: &Surface, device: vk::PhysicalDevice,
         queue_flags: vk::QueueFlags) -> bool
@@ -13,7 +73,18 @@ unsafe fn device_is_suitable(instance: &Instance, surface: &Surface, device: vk:
     instance.vk().GetPhysicalDeviceProperties(device, &mut device_properties);
     instance.vk().GetPhysicalDeviceFeatures(device, &mut device_features);
 
-    queue::queue_families(instance, surface, device, queue_flags).is_complete()
+    let extensions_supported = check_device_extension_support(instance, device);
+
+    let mut swap_chain_adequate = false;
+    if extensions_supported {
+        let swap_chain_details = SwapchainSupportDetails::new(instance, surface, device);
+        swap_chain_adequate = !swap_chain_details.formats.is_empty() &&
+            !swap_chain_details.present_modes.is_empty()
+    }
+
+    queue::queue_families(instance, surface, device, queue_flags).is_complete() &&
+        extensions_supported &&
+        swap_chain_adequate
 }
 
 pub fn choose_physical_device(instance: &Instance, surface: &Surface, queue_flags: vk::QueueFlags)
@@ -98,14 +169,16 @@ fn device_features_none() -> vk::PhysicalDeviceFeatures {
 }
 
 
-pub struct Inner {
+#[derive(Debug)]
+struct Inner {
     handle: vk::Device,
     physical_device: vk::PhysicalDevice,
-    features: vk::PhysicalDeviceFeatures,
+    // features: vk::PhysicalDeviceFeatures,
     vk: vk::DevicePointers,
     instance: Instance,
 }
 
+#[derive(Debug, Clone)]
 pub struct Device {
     inner: Arc<Inner>,
 }
@@ -128,16 +201,24 @@ impl Device {
 
         let features = device_features_none();
 
+        // createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+        // createInfo.ppEnabledExtensionNames = deviceExtensions.data();
+
+        let enabled_layer_names = instance::enabled_layer_names(instance.loader(), false);
+
+        let enabled_extension_names: Vec<_> = (&REQUIRED_EXTENSIONS[..]).iter().map(|ext_name|
+            ext_name.as_ptr() as *const c_char).collect();
+
         let create_info = vk::DeviceCreateInfo {
             sType: vk::STRUCTURE_TYPE_DEVICE_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
             queueCreateInfoCount: 1,
             pQueueCreateInfos: &queue_create_info,
-            enabledLayerCount: 0,
-            ppEnabledLayerNames: ptr::null(),
-            enabledExtensionCount: 0,
-            ppEnabledExtensionNames: ptr::null(),
+            enabledLayerCount: enabled_layer_names.len() as u32,
+            ppEnabledLayerNames: enabled_layer_names.as_ptr(),
+            enabledExtensionCount: enabled_extension_names.len() as u32,
+            ppEnabledExtensionNames: enabled_extension_names.as_ptr(),
             pEnabledFeatures: &features,
         };
 
@@ -155,7 +236,7 @@ impl Device {
             inner: Arc::new(Inner {
                 handle,
                 physical_device,
-                features,
+                // features,
                 vk,
                 instance,
             }),
@@ -175,6 +256,16 @@ impl Device {
     #[inline]
     pub fn handle(&self) -> vk::Device {
         self.inner.handle
+    }
+
+    #[inline]
+    pub fn physical_device(&self) -> vk::PhysicalDevice {
+        self.inner.physical_device
+    }
+
+    #[inline]
+    pub fn instance(&self) -> &Instance {
+        &self.inner.instance
     }
 }
 

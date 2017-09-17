@@ -39,55 +39,70 @@ fn create_debug_report_callback_ext(instance: &Instance,
     let create_drcb = instance.get_instance_proc_addr(b"vkCreateDebugReportCallbackEXT".as_ptr() as *const i8);
 }
 
-unsafe fn check_validation_layer_support(loader: &Loader) -> bool {
+fn check_validation_layer_support(loader: &Loader, print: bool) -> bool {
     let mut layer_count = 0u32;
-    ::check(loader.entry_points().EnumerateInstanceLayerProperties(&mut layer_count, ptr::null_mut()));
+    let mut available_layers: Vec<vk::LayerProperties>;
+    unsafe {
+        ::check(loader.entry_points().EnumerateInstanceLayerProperties(&mut layer_count, ptr::null_mut()));
+        available_layers = Vec::with_capacity(layer_count as usize);
+        available_layers.set_len(layer_count as usize);
+        ::check(loader.entry_points().EnumerateInstanceLayerProperties(&mut layer_count, available_layers.as_mut_ptr()));
 
-    let mut available_layers: Vec<vk::LayerProperties> = Vec::with_capacity(layer_count as usize);
-    available_layers.set_len(layer_count as usize);
-    ::check(loader.entry_points().EnumerateInstanceLayerProperties(&mut layer_count, available_layers.as_mut_ptr()));
-
-    // Print available layers:
-    for layer_props in &available_layers {
-        println!("Available layer: '{}'",
-            CStr::from_ptr(layer_props.layerName.as_ptr()).to_str().unwrap());
-    }
-
-    // Verify that validation layer is available:
-    for &layer_name in (&VALIDATION_LAYERS[..]).iter() {
-        let mut layer_found = false;
-        for layer_props in &available_layers {
-            if CStr::from_ptr(layer_name.as_ptr() as *const c_char) ==
-                CStr::from_ptr(layer_props.layerName.as_ptr())
-            {
-                println!("Layer validated: '{}'",
-                    CStr::from_ptr(layer_name.as_ptr() as *const c_char).to_str().unwrap());
-                layer_found = true;
-                break;
+        // Print available layers:
+        if print {
+            for layer_props in &available_layers {
+                println!("Available layer: '{}'",
+                    CStr::from_ptr(layer_props.layerName.as_ptr()).to_str().unwrap());
             }
         }
-        if !layer_found { return false; }
+
+        // Verify that validation layer is available:
+        for &layer_name in (&VALIDATION_LAYERS[..]).iter() {
+            let mut layer_found = false;
+            for layer_props in &available_layers {
+                if CStr::from_ptr(layer_name.as_ptr() as *const c_char) ==
+                    CStr::from_ptr(layer_props.layerName.as_ptr())
+                {
+                    if print { println!("Layer validated: '{}'",
+                        CStr::from_ptr(layer_name.as_ptr() as *const c_char).to_str().unwrap()); }
+                    layer_found = true;
+                    break;
+                }
+            }
+            if !layer_found { return false; }
+        }
     }
     true
 }
 
 /// Currently returns all available extensions.
-unsafe fn enumerate_instance_extension_properties(loader: &Loader) -> Vec<vk::ExtensionProperties> {
+fn enumerate_instance_extension_properties(loader: &Loader) -> Vec<vk::ExtensionProperties> {
     let mut avail_ext_count = 0u32;
-    ::check(loader.entry_points().EnumerateInstanceExtensionProperties(ptr::null(),
-        &mut avail_ext_count, ptr::null_mut()));
+    let mut avail_exts: Vec<vk::ExtensionProperties>;
+    unsafe {
+        ::check(loader.entry_points().EnumerateInstanceExtensionProperties(ptr::null(),
+            &mut avail_ext_count, ptr::null_mut()));
 
-    let mut avail_exts: Vec<vk::ExtensionProperties> = Vec::with_capacity(avail_ext_count as usize);
-    avail_exts.set_len(avail_ext_count as usize);
-    ::check(loader.entry_points().EnumerateInstanceExtensionProperties(ptr::null(),
-        &mut avail_ext_count, avail_exts.as_mut_ptr()));
+        avail_exts = Vec::with_capacity(avail_ext_count as usize);
+        avail_exts.set_len(avail_ext_count as usize);
+        ::check(loader.entry_points().EnumerateInstanceExtensionProperties(ptr::null(),
+            &mut avail_ext_count, avail_exts.as_mut_ptr()));
+
+        // Print available:
+        for ext in &avail_exts {
+            let name = (&ext.extensionName) as *const c_char;
+            println!("Available instance extension: '{}' (version: {})",
+                CStr::from_ptr(name).to_str().unwrap(), ext.specVersion);
+        }
+    }
+
     avail_exts
 }
 
 unsafe fn extension_names<'a>(extensions: &'a [vk::ExtensionProperties]) -> Vec<*const c_char> {
     extensions.iter().map(|ext| {
         let name = (&ext.extensionName) as *const c_char;
-        println!("Enabling extension: '{}' (version: {})",
+        println!("Enabling instance extension: '{}' (version: {})",
             CStr::from_ptr(name).to_str().unwrap(), ext.specVersion);
         name
         }).collect()
@@ -104,8 +119,21 @@ unsafe fn enumerate_physical_devices(instance: vk::Instance, vk: &vk::InstancePo
     devices
 }
 
+pub fn enabled_layer_names(loader: &Loader, print: bool) -> Vec<*const c_char> {
+    if ENABLE_VALIDATION_LAYERS && !check_validation_layer_support(loader, print) {
+        panic!("Unable to enable validation layers.");
+    }
+    if ENABLE_VALIDATION_LAYERS {
+         (&VALIDATION_LAYERS[..]).iter().map(|lyr_name|
+            lyr_name.as_ptr() as *const c_char).collect()
+    } else {
+        Vec::new()
+    }
+}
 
-pub struct Inner {
+
+#[derive(Debug)]
+struct Inner {
     handle: vk::Instance,
     pub vk: vk::InstancePointers,
     loader: Loader,
@@ -113,8 +141,7 @@ pub struct Inner {
     physical_devices: Vec<vk::PhysicalDevice>,
 }
 
-
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Instance {
     inner: Arc<Inner>,
 }
@@ -124,16 +151,9 @@ impl Instance {
         let loader = Loader::new();
 
         // Layers:
-        if ENABLE_VALIDATION_LAYERS && !check_validation_layer_support(&loader) {
-            panic!("Unable to enable validation layers.");
-        }
-        let enabled_layer_names: Vec<_> = if ENABLE_VALIDATION_LAYERS {
-             (&VALIDATION_LAYERS[..]).iter().map(|lyr_name|
-                lyr_name.as_ptr() as *const c_char).collect()
-        } else {
-            Vec::new()
-        };
+        let enabled_layer_names = enabled_layer_names(&loader, true);
 
+        // Extensions:
         let extensions = enumerate_instance_extension_properties(&loader);
         let extension_names = extension_names(extensions.as_slice());
 
@@ -208,6 +228,11 @@ impl Instance {
     #[inline]
     pub fn physical_devices(&self) -> &[vk::PhysicalDevice] {
         self.inner.physical_devices.as_slice()
+    }
+
+    #[inline]
+    pub fn loader(&self) -> &Loader {
+        &self.inner.loader
     }
 }
 

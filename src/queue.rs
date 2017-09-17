@@ -7,8 +7,8 @@ pub struct QueueFamilyIndices {
     // family_idx: i32,
     physical_device: vk::PhysicalDevice,
     flags: vk::QueueFlags,
-    flag_idxs: SmallVec<[i32; 64]>,
-    presentation_support_idxs: SmallVec<[i32; 64]>,
+    pub flag_idxs: SmallVec<[i32; 64]>,
+    pub presentation_support_idxs: SmallVec<[i32; 64]>,
 }
 
 impl QueueFamilyIndices {

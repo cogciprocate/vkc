@@ -3,8 +3,8 @@
 extern crate vkc;
 
 use std::ptr;
-use vkc::winit::{EventsLoop, WindowBuilder, Window, /*CreationError,*/ ControlFlow, Event, WindowEvent};
-use vkc::{vk, device, Version, Instance, Device, Surface};
+use vkc::winit::{EventsLoop, WindowBuilder, Window, ControlFlow, Event, WindowEvent};
+use vkc::{vk, device, Version, Instance, Device, Surface, Swapchain, ImageView};
 
 fn main() {
     unsafe {
@@ -16,7 +16,9 @@ fn main() {
 
 fn init_window() -> (Window, EventsLoop) {
     let events_loop = EventsLoop::new();
-    let window = WindowBuilder::new().build(&events_loop).unwrap();
+    let window = WindowBuilder::new()
+        .with_title("vkc - Hello Triangle")
+        .build(&events_loop).unwrap();
     (window, events_loop)
 }
 
@@ -31,7 +33,7 @@ unsafe fn init_instance() -> Instance {
         applicationVersion: Version::new(1, 0, 0).into(),
         pEngineName: engine_name.as_ptr() as *const i8,
         engineVersion: Version::new(1, 0, 0).into(),
-        apiVersion: Version::new(1, 0, 0).into(),
+        apiVersion: Version::new(1, 0, 51).into(),
     };
 
     Instance::new(&app_info)
@@ -43,6 +45,8 @@ struct App {
     device: Device,
     surface: Surface,
     instance: Instance,
+    swapchain: Swapchain,
+    image_views: Vec<ImageView>,
 }
 
 impl App {
@@ -53,7 +57,8 @@ impl App {
         let physical_device = device::choose_physical_device(&instance, &surface,
             vk::QUEUE_GRAPHICS_BIT);
         let device = Device::new(instance.clone(), &surface, physical_device, vk::QUEUE_GRAPHICS_BIT);
-
+        let swapchain = Swapchain::new(surface.clone(), device.clone(), vk::QUEUE_GRAPHICS_BIT);
+        let image_views = vkc::create_image_views(&swapchain);
 
         App {
             window: window,
@@ -61,6 +66,8 @@ impl App {
             device: device,
             surface: surface,
             instance,
+            swapchain,
+            image_views,
         }
     }
 
