@@ -207,6 +207,10 @@ impl Swapchain {
         self.inner.image_format
     }
 
+    pub fn extent(&self) -> vk::Extent2D {
+        vk::Extent2D { width: self.inner.extent.width, height: self.inner.extent.height }
+    }
+
     pub fn device(&self) -> &Device {
         &self.inner.device
     }

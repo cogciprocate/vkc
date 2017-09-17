@@ -4,7 +4,8 @@ extern crate vkc;
 
 use std::ptr;
 use vkc::winit::{EventsLoop, WindowBuilder, Window, ControlFlow, Event, WindowEvent};
-use vkc::{vk, device, Version, Instance, Device, Surface, Swapchain, ImageView};
+use vkc::{vk, device, Version, Instance, Device, Surface, Swapchain, ImageView,
+    PipelineLayout};
 
 fn main() {
     unsafe {
@@ -40,13 +41,14 @@ unsafe fn init_instance() -> Instance {
 }
 
 struct App {
+    instance: Instance,
     window: Window,
     events_loop: EventsLoop,
     device: Device,
     surface: Surface,
-    instance: Instance,
     swapchain: Swapchain,
     image_views: Vec<ImageView>,
+    pipeline_layout: PipelineLayout,
 }
 
 impl App {
@@ -59,15 +61,17 @@ impl App {
         let device = Device::new(instance.clone(), &surface, physical_device, vk::QUEUE_GRAPHICS_BIT);
         let swapchain = Swapchain::new(surface.clone(), device.clone(), vk::QUEUE_GRAPHICS_BIT);
         let image_views = vkc::create_image_views(&swapchain);
+        let pipeline_layout = PipelineLayout::new(device.clone(), swapchain.extent());
 
         App {
+            instance,
             window: window,
             events_loop: events_loop,
             device: device,
             surface: surface,
-            instance,
             swapchain,
             image_views,
+            pipeline_layout,
         }
     }
 
@@ -94,6 +98,6 @@ impl Drop for App {
         // self.events_loop.take();
         // self.window.take();
         // self.device.take();
-        println!("Dropping app...");
+        println!("Goodbye Triangle...");
     }
 }
