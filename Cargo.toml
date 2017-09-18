@@ -2,7 +2,7 @@
 name = "vkc"
 version = "0.0.1"
 authors = ["Nick Sanders <cogciprocate@gmail.com>"]
-description = "Vulkan Core"
+description = "Vulkan Compute"
 # documentation = "https://doc.cogciprocate.com/vkc"
 homepage = "https://github.com/cogciprocate/vkc"
 repository = "https://github.com/cogciprocate/vkc"

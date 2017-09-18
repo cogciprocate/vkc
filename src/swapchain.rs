@@ -5,7 +5,7 @@ use std::cmp;
 use std::fmt;
 use smallvec::SmallVec;
 use vk;
-use ::{queue, Instance, Surface, Device};
+use ::{queue, VkcResult, Instance, Surface, Device};
 
 
 pub struct SwapchainSupportDetails {
@@ -125,8 +125,11 @@ pub struct Swapchain {
 }
 
 impl Swapchain {
-    pub fn new(surface: Surface, device: Device, queue_flags: vk::QueueFlags) -> Swapchain {
-        let swapchain_details: SwapchainSupportDetails = SwapchainSupportDetails::new(device.instance(), &surface, device.physical_device());
+    pub fn new(surface: Surface, device: Device, queue_flags: vk::QueueFlags,
+            extent: Option<vk::Extent2D>, old_swapchain: Option<Swapchain>) -> VkcResult<Swapchain>
+    {
+        let swapchain_details: SwapchainSupportDetails = SwapchainSupportDetails::new(device.instance(),
+            &surface, device.physical_device());
         let surface_format = choose_swap_surface_format(&swapchain_details.formats);
         let present_mode = choose_swap_present_mode(&swapchain_details.present_modes);
         let extent = choose_swap_extent(&swapchain_details.capabilities);
@@ -173,7 +176,7 @@ impl Swapchain {
             compositeAlpha: vk::COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
             presentMode: present_mode,
             clipped: vk::TRUE,
-            oldSwapchain: 0,
+            oldSwapchain: old_swapchain.map(|sc| sc.handle()).unwrap_or(0),
         };
 
         let mut handle = 0;
@@ -190,7 +193,7 @@ impl Swapchain {
             ::check(device.vk().GetSwapchainImagesKHR(device.handle(), handle, &mut image_count, images.as_mut_ptr()));
         }
 
-        Swapchain {
+        Ok(Swapchain {
             inner: Arc::new(Inner {
                 handle,
                 device,
@@ -199,7 +202,7 @@ impl Swapchain {
                 image_format: surface_format.format,
                 extent,
             })
-        }
+        })
     }
 
     pub fn images(&self) -> &[vk::Image] {

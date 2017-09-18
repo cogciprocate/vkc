@@ -5,10 +5,10 @@ use std::path::Path;
 use std::fs::File;
 use std::io::{Read, BufReader};
 use vk;
-use ::Device;
+use ::{VkcResult, Device};
 
 
-pub fn read_file<P: AsRef<Path>>(file: P) -> Vec<u8> {
+pub fn read_file<P: AsRef<Path>>(file: P) -> VkcResult<Vec<u8>> {
     let file_name = file.as_ref().display().to_string();
     let f = File::open(file).expect("shader file not found");
     let file_bytes = f.metadata().unwrap().len() as usize;
@@ -21,5 +21,5 @@ pub fn read_file<P: AsRef<Path>>(file: P) -> Vec<u8> {
         },
         Err(e) => panic!("{}", e),
     }
-    contents
+    Ok(contents)
 }

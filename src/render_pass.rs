@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::ffi::CStr;
 use std::ptr;
 use vk;
-use ::{util, Device, ShaderModule};
+use ::{util, VkcResult, Device, ShaderModule};
 
 
 #[derive(Debug)]
@@ -17,7 +17,7 @@ pub struct RenderPass {
 }
 
 impl RenderPass {
-    pub fn new(device: Device, swap_chain_image_format: vk::Format) -> RenderPass {
+    pub fn new(device: Device, swap_chain_image_format: vk::Format) -> VkcResult<RenderPass> {
         let color_attachment = vk::AttachmentDescription {
             flags: 0,
             format: swap_chain_image_format,
@@ -75,12 +75,12 @@ impl RenderPass {
             ::check(device.vk().CreateRenderPass(device.handle(), &render_pass_info, ptr::null(), &mut handle));
         }
 
-        RenderPass {
+        Ok(RenderPass {
             inner: Arc::new(Inner {
                 handle,
                 device,
             })
-        }
+        })
     }
 
     pub fn handle(&self) -> vk::RenderPass {

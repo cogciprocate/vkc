@@ -23,7 +23,7 @@ fn init_window() -> (Window, EventsLoop) {
     (window, events_loop)
 }
 
-unsafe fn init_instance() -> Instance {
+unsafe fn init_instance() -> VkcResult<Instance> {
     let app_name = b"Hello Triangle\0";
     let engine_name = b"No Engine\0";
 
@@ -44,37 +44,39 @@ struct App {
     instance: Instance,
     window: Window,
     events_loop: EventsLoop,
+    queue_family_flags: vk::Flags,
     device: Device,
     surface: Surface,
-    swapchain: Swapchain,
-    image_views: Vec<ImageView>,
-    render_pass: RenderPass,
+    swapchain: Option<Swapchain>,
+    image_views: Option<Vec<ImageView>>,
+    render_pass: Option<RenderPass>,
     pipeline_layout: PipelineLayout,
-    graphics_pipeline: GraphicsPipeline,
-    framebuffers: Vec<Framebuffer>,
+    graphics_pipeline: Option<GraphicsPipeline>,
+    framebuffers: Option<Vec<Framebuffer>>,
     command_pool: CommandPool,
-    command_buffers: Vec<vk::CommandBuffer>,
+    command_buffers: Option<Vec<vk::CommandBuffer>>,
     image_available_semaphore: Semaphore,
     render_finished_semaphore: Semaphore,
 }
 
 impl App {
     pub unsafe fn new() -> VkcResult<App> {
-        let instance = init_instance();
+        let instance = init_instance()?;
         let (window, events_loop) = init_window();
-        let surface = Surface::new(instance.clone(), &window);
+        let surface = Surface::new(instance.clone(), &window)?;
         let queue_family_flags = vk::QUEUE_GRAPHICS_BIT;
         let physical_device = device::choose_physical_device(&instance, &surface,
-            queue_family_flags);
-        let device = Device::new(instance.clone(), &surface, physical_device, queue_family_flags);
-        let swapchain = Swapchain::new(surface.clone(), device.clone(), queue_family_flags);
-        let image_views = vkc::create_image_views(&swapchain);
-        let render_pass = RenderPass::new(device.clone(), swapchain.image_format());
-        let pipeline_layout = PipelineLayout::new(device.clone());
+            queue_family_flags)?;
+        let device = Device::new(instance.clone(), &surface, physical_device, queue_family_flags)?;
+        let swapchain = Swapchain::new(surface.clone(), device.clone(), queue_family_flags,
+            None, None)?;
+        let image_views = vkc::create_image_views(&swapchain)?;
+        let render_pass = RenderPass::new(device.clone(), swapchain.image_format())?;
+        let pipeline_layout = PipelineLayout::new(device.clone())?;
         let graphics_pipeline = GraphicsPipeline::new(device.clone(), &pipeline_layout,
-            &render_pass, swapchain.extent().clone());
+            &render_pass, swapchain.extent().clone())?;
         let framebuffers = vkc::create_framebuffers(&device, &render_pass,
-            &image_views, swapchain.extent().clone());
+            &image_views, swapchain.extent().clone())?;
         let command_pool = CommandPool::new(device.clone(), &surface, queue_family_flags)?;
         let command_buffers = vkc::create_command_buffers(&device, &command_pool, &render_pass,
             &graphics_pipeline, &framebuffers, swapchain.extent())?;
@@ -85,31 +87,73 @@ impl App {
             instance,
             window: window,
             events_loop: events_loop,
+            queue_family_flags,
             device: device,
             surface: surface,
-            swapchain,
-            image_views,
-            render_pass,
+            swapchain: Some(swapchain),
+            image_views: Some(image_views),
+            render_pass: Some(render_pass),
             pipeline_layout,
-            graphics_pipeline,
-            framebuffers,
+            graphics_pipeline: Some(graphics_pipeline),
+            framebuffers: Some(framebuffers),
             command_pool,
-            command_buffers,
+            command_buffers: Some(command_buffers),
             image_available_semaphore,
             render_finished_semaphore,
         })
     }
 
-    unsafe fn main_loop(&mut self) -> VkcResult<()> {
+    fn cleanup_swapchain(&mut self) {
+        self.swapchain = None;
+        self.image_views = None;
+        self.render_pass = None;
+        self.graphics_pipeline = None;
+        self.framebuffers = None;
+        unsafe {
+            self.device.vk().FreeCommandBuffers(self.device.handle(), self.command_pool.handle(),
+                self.command_buffers.as_ref().unwrap().len() as u32,
+                self.command_buffers.as_mut().unwrap().as_mut_ptr());
+        }
+        self.command_buffers = None;
+    }
+
+    fn recreate_swapchain(&mut self, current_extent: vk::Extent2D) -> VkcResult<()> {
+        unsafe { vkc::check(self.device.vk().DeviceWaitIdle(self.device.handle())); }
+
+        // TODO: Look into using the  `oldSwapChain` field in the
+        // `SwapchainCreateInfoKHR` to recreate in-flight.
+        self.swapchain = Some(Swapchain::new(self.surface.clone(), self.device.clone(),
+            self.queue_family_flags, Some(current_extent), self.swapchain.take())?);
+        self.image_views = Some(vkc::create_image_views(self.swapchain.as_ref().unwrap())?);
+        self.render_pass = Some(RenderPass::new(self.device.clone(),
+            self.swapchain.as_ref().unwrap().image_format())?);
+        self.graphics_pipeline = Some(GraphicsPipeline::new(self.device.clone(),
+            &self.pipeline_layout, self.render_pass.as_ref().unwrap(),
+            self.swapchain.as_ref().unwrap().extent().clone())?);
+        self.framebuffers = Some(vkc::create_framebuffers(&self.device,
+            self.render_pass.as_ref().unwrap(), self.image_views.as_ref().unwrap(),
+            self.swapchain.as_ref().unwrap().extent().clone())?);
+        self.command_buffers = Some(vkc::create_command_buffers(&self.device, &self.command_pool,
+            self.render_pass.as_ref().unwrap(), self.graphics_pipeline.as_ref().unwrap(),
+            self.framebuffers.as_ref().unwrap(), self.swapchain.as_ref().unwrap().extent())?);
+        Ok(())
+    }
+
+    fn main_loop(&mut self) -> VkcResult<()> {
         let mut exit = false;
+        let mut recreate_swap = false;
+        let mut current_extent = self.swapchain.as_ref().unwrap().extent().clone();
+
         loop {
-            vkc::draw_frame(&self.device, &self.swapchain,
+            vkc::draw_frame(&self.device, self.swapchain.as_ref().unwrap(),
                 &self.image_available_semaphore, &self.render_finished_semaphore,
-                &self.command_buffers)?;
+                self.command_buffers.as_ref().unwrap())?;
 
             self.events_loop.poll_events(|event| {
                 match event {
                     Event::WindowEvent { event: WindowEvent::Resized(w, h), .. } => {
+                        current_extent = vk::Extent2D { width: w, height: h };
+                        recreate_swap = true;
                         println!("The window was resized to {}x{}", w, h);
                     },
                     Event::WindowEvent { event: WindowEvent::Closed, .. } => {
@@ -120,10 +164,14 @@ impl App {
                 }
             });
 
+            if recreate_swap {
+                self.recreate_swapchain(current_extent.clone())?;
+                recreate_swap = false;
+            };
             if exit { break; }
         }
 
-        vkc::check(self.device.vk().DeviceWaitIdle(self.device.handle()));
+        unsafe { vkc::check(self.device.vk().DeviceWaitIdle(self.device.handle())); }
         Ok(())
     }
 }

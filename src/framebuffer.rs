@@ -2,7 +2,7 @@
 use std::sync::Arc;
 use std::ptr;
 use vk;
-use ::{util, Device, RenderPass, ImageView};
+use ::{util, VkcResult, Device, RenderPass, ImageView};
 
 
 #[derive(Debug)]
@@ -20,7 +20,7 @@ pub struct Framebuffer {
 
 impl Framebuffer {
     pub fn new(device: Device, render_pass: RenderPass, image_view: ImageView,
-            swapchain_extent: vk::Extent2D) -> Framebuffer
+            swapchain_extent: vk::Extent2D) -> VkcResult<Framebuffer>
     {
         let attachments = [image_view.handle()];
         let create_info = vk::FramebufferCreateInfo {
@@ -41,14 +41,14 @@ impl Framebuffer {
                 &mut handle));
         }
 
-        Framebuffer {
+        Ok(Framebuffer {
             inner: Arc::new(Inner {
                 handle,
                 device,
                 render_pass,
                 image_view,
             })
-        }
+        })
     }
 
     pub fn handle(&self) -> vk::Framebuffer {
@@ -70,10 +70,11 @@ impl Drop for Inner {
 
 
 pub fn create_framebuffers(device: &Device, render_pass: &RenderPass,
-        swapchain_image_views: &[ImageView], swapchain_extent: vk::Extent2D) -> Vec<Framebuffer>
+        swapchain_image_views: &[ImageView], swapchain_extent: vk::Extent2D)
+        -> VkcResult<Vec<Framebuffer>>
 {
     swapchain_image_views.iter().map(|image_view| {
         Framebuffer::new(device.clone(), render_pass.clone(), image_view.clone(),
             swapchain_extent.clone())
-    }).collect()
+    }).collect::<Result<Vec<_>, _>>()
 }

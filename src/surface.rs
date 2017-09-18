@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use winit;
 use vk;
-use ::{Instance};
+use ::{VkcResult, Instance};
 
 
 #[derive(Debug)]
@@ -20,7 +20,7 @@ pub struct Surface {
 }
 
 impl Surface {
-    pub fn new(instance: Instance, window: &winit::Window) -> Surface {
+    pub fn new(instance: Instance, window: &winit::Window) -> VkcResult<Surface> {
         use winit::os::windows::WindowExt;
         let mut handle = 0;
 
@@ -37,13 +37,13 @@ impl Surface {
                 &mut handle));
         }
 
-        Surface {
+        Ok(Surface {
             inner: Arc::new(Inner {
                 handle: handle,
                 instance: instance,
                 active: AtomicBool::new(false),
             })
-        }
+        })
     }
 
     pub fn handle(&self) -> vk::SurfaceKHR {

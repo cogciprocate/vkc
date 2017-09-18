@@ -2,7 +2,7 @@
 use std::sync::Arc;
 use std::ptr;
 use vk;
-use ::{Swapchain};
+use ::{VkcResult, Swapchain};
 
 
 #[derive(Debug)]
@@ -17,7 +17,7 @@ pub struct ImageView {
 }
 
 impl ImageView {
-    pub fn new(swapchain: Swapchain, image: vk::Image) -> ImageView {
+    pub fn new(swapchain: Swapchain, image: vk::Image) -> VkcResult<ImageView> {
         let create_info = vk::ImageViewCreateInfo {
             sType: vk::STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
             pNext: ptr::null(),
@@ -47,12 +47,12 @@ impl ImageView {
                 &create_info, ptr::null(), &mut handle));
         }
 
-        ImageView {
+        Ok(ImageView {
             inner: Arc::new(Inner {
                 handle: handle,
                 swapchain: swapchain,
             })
-        }
+        })
     }
 
     pub fn handle(&self) -> vk::ImageView {
@@ -74,12 +74,13 @@ impl Drop for Inner {
 }
 
 
-pub fn create_image_views(swapchain: &Swapchain) -> Vec<ImageView> {
+pub fn create_image_views(swapchain: &Swapchain) -> VkcResult<Vec<ImageView>> {
     // let mut image_views: Vec<ImageView> = Vec::with_capacity(swapchain.images().len());
     // for &image in swapchain.images() {
-    //     image_views.push(ImageView::new(swapchain.clone(), image));
+    //     image_views.push(ImageView::new(swapchain.clone(), image)?);
     // }
+    // Ok(image_views)
     swapchain.images().iter().map(|&image| {
         ImageView::new(swapchain.clone(), image)
-    }).collect()
+    }).collect::<Result<Vec<_>, _>>()
 }

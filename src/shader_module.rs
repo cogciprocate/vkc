@@ -5,7 +5,7 @@ use std::path::Path;
 use std::fs::File;
 use std::io::{Read, BufReader};
 use vk;
-use ::Device;
+use ::{VkcResult, Device};
 
 
 #[derive(Debug)]
@@ -20,7 +20,7 @@ pub struct ShaderModule {
 }
 
 impl ShaderModule {
-    pub fn new(device: Device, code: &[u8]) -> ShaderModule {
+    pub fn new(device: Device, code: &[u8]) -> VkcResult<ShaderModule> {
         let create_info = vk::ShaderModuleCreateInfo {
             sType: vk::STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
             pNext: ptr::null(),
@@ -35,12 +35,12 @@ impl ShaderModule {
                 ptr::null(), &mut handle));
         }
 
-        ShaderModule {
+        Ok(ShaderModule {
             inner: Arc::new(Inner {
                 handle,
                 device,
             })
-        }
+        })
     }
 
     pub fn handle(&self) -> vk::ShaderModule {

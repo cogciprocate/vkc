@@ -4,6 +4,7 @@ use std::ptr;
 use std::fmt;
 use lib;
 use vk;
+use ::VkcResult;
 
 
 type ProcAddrFnSym<'lib> = lib::Symbol<'lib, extern "system" fn(instance: vk::Instance, pName: *const i8)
@@ -20,7 +21,7 @@ pub struct Loader {
 }
 
 impl Loader {
-    pub unsafe fn new() -> Loader {
+    pub unsafe fn new() -> VkcResult<Loader> {
         let lib_filename = if cfg!(not(any(target_os = "macos", target_os = "ios"))) {
             if cfg!(all(unix, not(target_os = "android"), not(target_os = "macos"))) { "libvulkan.so.1" }
             else if cfg!(target_os = "android") { "libvulkan.so" }
@@ -38,7 +39,7 @@ impl Loader {
         };
         let entry_points = vk::EntryPoints::load(|name|
             mem::transmute((get_proc_addr)(0, name.as_ptr())));
-        Loader { vk_lib, get_proc_addr, entry_points }
+        Ok(Loader { vk_lib, get_proc_addr, entry_points })
     }
 
     #[inline]

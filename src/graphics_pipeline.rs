@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::ptr;
 use std::ffi::CStr;
 use vk;
-use ::{util, Device, ShaderModule, PipelineLayout, RenderPass};
+use ::{util, VkcResult, Device, ShaderModule, PipelineLayout, RenderPass};
 
 
 #[derive(Debug)]
@@ -19,13 +19,13 @@ pub struct GraphicsPipeline {
 
 impl GraphicsPipeline {
     pub fn new(device: Device, pipeline_layout: &PipelineLayout,
-            render_pass: &RenderPass, swap_chain_extent: vk::Extent2D) -> GraphicsPipeline
+            render_pass: &RenderPass, swap_chain_extent: vk::Extent2D) -> VkcResult<GraphicsPipeline>
     {
-        let vert_shader_code = util::read_file("/src/vkc/shaders/vert.spv");
-        let frag_shader_code = util::read_file("/src/vkc/shaders/frag.spv");
+        let vert_shader_code = util::read_file("/src/vkc/shaders/vert.spv")?;
+        let frag_shader_code = util::read_file("/src/vkc/shaders/frag.spv")?;
 
-        let vert_shader_module = ShaderModule::new(device.clone(), &vert_shader_code);
-        let frag_shader_module = ShaderModule::new(device.clone(), &frag_shader_code);
+        let vert_shader_module = ShaderModule::new(device.clone(), &vert_shader_code)?;
+        let frag_shader_module = ShaderModule::new(device.clone(), &frag_shader_code)?;
 
         let fn_name = unsafe { CStr::from_bytes_with_nul_unchecked(b"main\0") };
 
@@ -211,12 +211,12 @@ impl GraphicsPipeline {
                 ptr::null(), &mut handle));
         }
 
-        GraphicsPipeline {
+        Ok(GraphicsPipeline {
             inner: Arc::new(Inner {
                 handle,
                 device,
             })
-        }
+        })
     }
 
     pub fn handle(&self) -> vk::Pipeline {

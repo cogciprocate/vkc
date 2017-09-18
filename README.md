@@ -1,6 +1,4 @@
-# vkc - Vulkan Core
-The heart of the Vulkan® API, expressed in Rust
-
+# vkc - Vulkan® Compute
 
 
 

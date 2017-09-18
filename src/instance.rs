@@ -4,7 +4,7 @@ use std::ptr;
 use std::mem;
 use std::os::raw::{c_char, c_void};
 use vk;
-use loader::Loader;
+use ::{VkcResult, Loader};
 
 
 static VALIDATION_LAYERS: [&[u8]; 1] = [
@@ -147,8 +147,8 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub unsafe fn new(app_info: &vk::ApplicationInfo) -> Instance {
-        let loader = Loader::new();
+    pub unsafe fn new(app_info: &vk::ApplicationInfo) -> VkcResult<Instance> {
+        let loader = Loader::new()?;
 
         // Layers:
         let enabled_layer_names = enabled_layer_names(&loader, true);
@@ -199,7 +199,7 @@ impl Instance {
         // Device:
         let physical_devices = enumerate_physical_devices(handle, &vk);
 
-        Instance {
+        Ok(Instance {
             inner: Arc::new(Inner {
                 handle,
                 vk,
@@ -207,7 +207,7 @@ impl Instance {
                 debug_callback,
                 physical_devices,
             }),
-        }
+        })
     }
 
     #[inline]

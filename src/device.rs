@@ -88,7 +88,7 @@ unsafe fn device_is_suitable(instance: &Instance, surface: &Surface, device: vk:
 }
 
 pub fn choose_physical_device(instance: &Instance, surface: &Surface, queue_flags: vk::QueueFlags)
-        -> vk::PhysicalDevice
+        -> VkcResult<vk::PhysicalDevice>
 {
     let mut preferred_device = 0;
 
@@ -105,7 +105,7 @@ pub fn choose_physical_device(instance: &Instance, surface: &Surface, queue_flag
         println!("Preferred device: {}", preferred_device);
     }
 
-    preferred_device
+    Ok(preferred_device)
 }
 
 fn device_features_none() -> vk::PhysicalDeviceFeatures {
@@ -187,7 +187,7 @@ pub struct Device {
 
 impl Device {
     pub fn new(instance: Instance, surface: &Surface, physical_device: vk::PhysicalDevice,
-            queue_familiy_flags: vk::QueueFlags) -> Device
+            queue_familiy_flags: vk::QueueFlags) -> VkcResult<Device>
     {
         let queue_family_idx = queue::queue_families(&instance, surface,
             physical_device, queue_familiy_flags).family_idxs()[0] as u32;
@@ -234,7 +234,7 @@ impl Device {
         let vk = vk::DevicePointers::load(|name|
             unsafe { mem::transmute(instance.get_instance_proc_addr(name.as_ptr())) });
 
-        Device {
+        Ok(Device {
             inner: Arc::new(Inner {
                 handle,
                 physical_device,
@@ -243,7 +243,7 @@ impl Device {
                 vk,
                 instance,
             }),
-        }
+        })
     }
 
     #[inline]
