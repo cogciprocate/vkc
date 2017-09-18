@@ -1137,6 +1137,7 @@ pub struct FormatProperties {
     pub bufferFeatures: FormatFeatureFlags,
 }
 
+#[derive(Debug, Clone)]
 #[repr(C)]
 pub struct Extent3D {
     pub width: u32,
@@ -1688,7 +1689,7 @@ pub struct Offset2D {
     pub y: i32,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[repr(C)]
 pub struct Extent2D {
     pub width: u32,

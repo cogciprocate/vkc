@@ -174,6 +174,8 @@ struct Inner {
     handle: vk::Device,
     physical_device: vk::PhysicalDevice,
     // features: vk::PhysicalDeviceFeatures,
+    // queues: SmallVec<[u32; 32]>,
+    queue_family_idx: u32,
     vk: vk::DevicePointers,
     instance: Instance,
 }
@@ -188,13 +190,13 @@ impl Device {
             queue_familiy_flags: vk::QueueFlags) -> Device
     {
         let queue_family_idx = queue::queue_families(&instance, surface,
-            physical_device, queue_familiy_flags).family_idxs()[0];
+            physical_device, queue_familiy_flags).family_idxs()[0] as u32;
 
         let queue_create_info = vk::DeviceQueueCreateInfo {
             sType: vk::STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
-            queueFamilyIndex: queue_family_idx as u32,
+            queueFamilyIndex: queue_family_idx,
             queueCount: 1,
             pQueuePriorities: &1.0,
         };
@@ -237,6 +239,7 @@ impl Device {
                 handle,
                 physical_device,
                 // features,
+                queue_family_idx,
                 vk,
                 instance,
             }),
@@ -244,8 +247,13 @@ impl Device {
     }
 
     #[inline]
-    pub fn queue(&self, _queue_family_index: u32, _queue_index: u32) -> VkcResult<Queue> {
-        Err(())
+    pub fn queue(&self, queue_idx: u32) -> vk::Queue {
+        let mut queue_handle = 0;
+        unsafe {
+            self.vk().GetDeviceQueue(self.inner.handle, self.inner.queue_family_idx, queue_idx,
+                &mut queue_handle);
+        }
+        queue_handle
     }
 
     #[inline]

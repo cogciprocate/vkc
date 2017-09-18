@@ -48,6 +48,16 @@ impl RenderPass {
             pPreserveAttachments: ptr::null(),
         };
 
+        let dependency = vk::SubpassDependency {
+            dependencyFlags: 0,
+            srcSubpass: vk::SUBPASS_EXTERNAL,
+            dstSubpass: 0,
+            srcStageMask: vk::PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            srcAccessMask: 0,
+            dstStageMask: vk::PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            dstAccessMask: vk::ACCESS_COLOR_ATTACHMENT_READ_BIT | vk::ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        };
+
         let render_pass_info = vk::RenderPassCreateInfo {
             sType: vk::STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
             pNext: ptr::null(),
@@ -56,8 +66,8 @@ impl RenderPass {
             pAttachments: &color_attachment,
             subpassCount: 1,
             pSubpasses: &subpass,
-            dependencyCount: 0,
-            pDependencies: ptr::null(),
+            dependencyCount: 1,
+            pDependencies: &dependency,
         };
 
         let mut handle = 0;

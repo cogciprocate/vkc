@@ -65,6 +65,16 @@ impl GraphicsPipeline {
             sType: vk::STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
+            // * VK_PRIMITIVE_TOPOLOGY_POINT_LIST: points from vertices
+            // * VK_PRIMITIVE_TOPOLOGY_LINE_LIST: line from every 2 vertices
+            //   without reuse
+            // * VK_PRIMITIVE_TOPOLOGY_LINE_STRIP: the end vertex of every
+            //   line is used as start vertex for the next line
+            // * VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST: triangle from every 3
+            //   vertices without reuse
+            // * VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP: the second and third
+            //   vertex of every triangle are used as first two vertices of
+            //   the next triangle
             topology: vk::PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
             primitiveRestartEnable: vk::FALSE,
         };
@@ -135,8 +145,8 @@ impl GraphicsPipeline {
             colorWriteMask: vk::COLOR_COMPONENT_R_BIT | vk::COLOR_COMPONENT_G_BIT | vk::COLOR_COMPONENT_B_BIT | vk::COLOR_COMPONENT_A_BIT,
         };
 
-        // ///////////////////////////////////
-        // /////////// KEEPME (ALPHA BLENDING)
+        // ///////////////////////////////////////////////
+        // /////////// KEEPME (ALPHA BLENDING) ///////////
         // let color_blend_attachment = vk::PipelineColorBlendAttachmentState {
         //     blendEnable: vk::FALSE,
         //     srcColorBlendFactor: vk::BLEND_FACTOR_SRC_ALPHA,
@@ -146,8 +156,8 @@ impl GraphicsPipeline {
         //     dstAlphaBlendFactor: vk::BLEND_FACTOR_ZERO,
         //     alphaBlendOp: vk::BLEND_OP_ADD,
         //     colorWriteMask: vk::COLOR_COMPONENT_R_BIT | vk::COLOR_COMPONENT_G_BIT | vk::COLOR_COMPONENT_B_BIT | vk::COLOR_COMPONENT_A_BIT,
-        // }; ////////////////////////////////
-        // ///////////////////////////////////
+        // }; ////////////////////////////////////////////
+        // ///////////////////////////////////////////////
 
         let color_blending = vk::PipelineColorBlendStateCreateInfo {
             sType: vk::STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
@@ -160,16 +170,17 @@ impl GraphicsPipeline {
             blendConstants: [0.0f32; 4],
         };
 
-        let dynamic_states = [vk::DYNAMIC_STATE_VIEWPORT, vk::DYNAMIC_STATE_LINE_WIDTH];
-
-        let dynamic_state = vk::PipelineDynamicStateCreateInfo {
-            sType: vk::STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-            pNext: ptr::null(),
-            flags: 0,
-            dynamicStateCount: 2,
-            pDynamicStates: dynamic_states.as_ptr(),
-        };
-
+        // ///////////////////////////////////////////////
+        // /////////// KEEPME (DYNAMIC STATES) ///////////
+        // let dynamic_states = [vk::DYNAMIC_STATE_VIEWPORT, vk::DYNAMIC_STATE_LINE_WIDTH];
+        // let dynamic_state = vk::PipelineDynamicStateCreateInfo {
+        //     sType: vk::STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+        //     pNext: ptr::null(),
+        //     flags: 0,
+        //     dynamicStateCount: 2,
+        //     pDynamicStates: dynamic_states.as_ptr(),
+        // }; ////////////////////////////////////////////
+        // ///////////////////////////////////////////////
 
         let create_info = vk::GraphicsPipelineCreateInfo {
             sType: vk::STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -185,7 +196,8 @@ impl GraphicsPipeline {
             pMultisampleState: &multisampling,
             pDepthStencilState: ptr::null(),
             pColorBlendState: &color_blending,
-            pDynamicState: &dynamic_state,
+            // pDynamicState: &dynamic_state,
+            pDynamicState: ptr::null(),
             layout: pipeline_layout.handle(),
             renderPass: render_pass.handle(),
             subpass: 0,

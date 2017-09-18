@@ -94,14 +94,17 @@ fn choose_swap_present_mode(available_present_modes: &[vk::PresentModeKHR]) -> v
 
 fn choose_swap_extent(capabilities: &vk::SurfaceCapabilitiesKHR) -> vk::Extent2D {
     if capabilities.currentExtent.width != u32::max_value() {
-        return vk::Extent2D { width: capabilities.currentExtent.width,
-            height: capabilities.currentExtent.height };
+        // return vk::Extent2D { width: capabilities.currentExtent.width,
+        //     height: capabilities.currentExtent.height };
+        println!("Swap Extent (current): {:?}", &capabilities.currentExtent);
+        return capabilities.currentExtent.clone();
     } else {
-        let mut actual_extent = vk::Extent2D { width: 800, height: 600 };
+        let mut actual_extent = vk::Extent2D { width: 1024, height: 768 };
         actual_extent.width = cmp::max(capabilities.minImageExtent.width,
             cmp::min(capabilities.maxImageExtent.width, actual_extent.width));
         actual_extent.height = cmp::max(capabilities.minImageExtent.height,
             cmp::min(capabilities.maxImageExtent.height, actual_extent.height));
+        println!("Swap Extent (actual): {:?}", &actual_extent);
         return actual_extent
     }
 }

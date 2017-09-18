@@ -3,14 +3,14 @@
 extern crate vkc;
 
 use std::ptr;
-use vkc::winit::{EventsLoop, WindowBuilder, Window, ControlFlow, Event, WindowEvent};
+use vkc::winit::{EventsLoop, WindowBuilder, Window, /*ControlFlow,*/ Event, WindowEvent};
 use vkc::{vk, device, VkcResult, Version, Instance, Device, Surface, Swapchain, ImageView,
-    PipelineLayout, RenderPass, GraphicsPipeline, Framebuffer, CommandPool};
+    PipelineLayout, RenderPass, GraphicsPipeline, Framebuffer, CommandPool, Semaphore};
 
 fn main() {
     unsafe {
         let mut app = App::new().unwrap();
-        app.main_loop();
+        app.main_loop().unwrap();
     }
     println!("Goodbye.");
 }
@@ -54,6 +54,8 @@ struct App {
     framebuffers: Vec<Framebuffer>,
     command_pool: CommandPool,
     command_buffers: Vec<vk::CommandBuffer>,
+    image_available_semaphore: Semaphore,
+    render_finished_semaphore: Semaphore,
 }
 
 impl App {
@@ -76,6 +78,8 @@ impl App {
         let command_pool = CommandPool::new(device.clone(), &surface, queue_family_flags)?;
         let command_buffers = vkc::create_command_buffers(&device, &command_pool, &render_pass,
             &graphics_pipeline, &framebuffers, swapchain.extent())?;
+        let image_available_semaphore = Semaphore::new(device.clone())?;
+        let render_finished_semaphore = Semaphore::new(device.clone())?;
 
         Ok(App {
             instance,
@@ -91,22 +95,36 @@ impl App {
             framebuffers,
             command_pool,
             command_buffers,
+            image_available_semaphore,
+            render_finished_semaphore,
         })
     }
 
-    unsafe fn main_loop(&mut self) {
-        self.events_loop.run_forever(|event| {
-            match event {
-                Event::WindowEvent { event: WindowEvent::Closed, .. } => {
-                    println!("Vulkan window closing...");
-                    ControlFlow::Break
-                },
-                _ => ControlFlow::Continue,
-            }
-        });
+    unsafe fn main_loop(&mut self) -> VkcResult<()> {
+        let mut exit = false;
+        loop {
+            vkc::draw_frame(&self.device, &self.swapchain,
+                &self.image_available_semaphore, &self.render_finished_semaphore,
+                &self.command_buffers)?;
 
-        // self.events_loop.take();
-        // self.surface.take();
+            self.events_loop.poll_events(|event| {
+                match event {
+                    Event::WindowEvent { event: WindowEvent::Resized(w, h), .. } => {
+                        println!("The window was resized to {}x{}", w, h);
+                    },
+                    Event::WindowEvent { event: WindowEvent::Closed, .. } => {
+                        println!("Vulkan window closing...");
+                        exit = true;
+                    },
+                    _ => ()
+                }
+            });
+
+            if exit { break; }
+        }
+
+        vkc::check(self.device.vk().DeviceWaitIdle(self.device.handle()));
+        Ok(())
     }
 }
 
