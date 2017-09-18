@@ -8,12 +8,13 @@ use vk;
 use ::Device;
 
 
-
+#[derive(Debug)]
 struct Inner {
     handle: vk::ShaderModule,
     device: Device,
 }
 
+#[derive(Debug, Clone)]
 pub struct ShaderModule {
     inner: Arc<Inner>,
 }

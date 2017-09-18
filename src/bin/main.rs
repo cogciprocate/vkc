@@ -4,12 +4,12 @@ extern crate vkc;
 
 use std::ptr;
 use vkc::winit::{EventsLoop, WindowBuilder, Window, ControlFlow, Event, WindowEvent};
-use vkc::{vk, device, Version, Instance, Device, Surface, Swapchain, ImageView,
-    PipelineLayout, RenderPass, GraphicsPipeline};
+use vkc::{vk, device, VkcResult, Version, Instance, Device, Surface, Swapchain, ImageView,
+    PipelineLayout, RenderPass, GraphicsPipeline, Framebuffer, CommandPool};
 
 fn main() {
     unsafe {
-        let mut app = App::new();
+        let mut app = App::new().unwrap();
         app.main_loop();
     }
     println!("Goodbye.");
@@ -51,24 +51,33 @@ struct App {
     render_pass: RenderPass,
     pipeline_layout: PipelineLayout,
     graphics_pipeline: GraphicsPipeline,
+    framebuffers: Vec<Framebuffer>,
+    command_pool: CommandPool,
+    command_buffers: Vec<vk::CommandBuffer>,
 }
 
 impl App {
-    pub unsafe fn new() -> App {
+    pub unsafe fn new() -> VkcResult<App> {
         let instance = init_instance();
         let (window, events_loop) = init_window();
         let surface = Surface::new(instance.clone(), &window);
+        let queue_family_flags = vk::QUEUE_GRAPHICS_BIT;
         let physical_device = device::choose_physical_device(&instance, &surface,
-            vk::QUEUE_GRAPHICS_BIT);
-        let device = Device::new(instance.clone(), &surface, physical_device, vk::QUEUE_GRAPHICS_BIT);
-        let swapchain = Swapchain::new(surface.clone(), device.clone(), vk::QUEUE_GRAPHICS_BIT);
+            queue_family_flags);
+        let device = Device::new(instance.clone(), &surface, physical_device, queue_family_flags);
+        let swapchain = Swapchain::new(surface.clone(), device.clone(), queue_family_flags);
         let image_views = vkc::create_image_views(&swapchain);
         let render_pass = RenderPass::new(device.clone(), swapchain.image_format());
         let pipeline_layout = PipelineLayout::new(device.clone());
         let graphics_pipeline = GraphicsPipeline::new(device.clone(), &pipeline_layout,
-            &render_pass, swapchain.extent());
+            &render_pass, swapchain.extent().clone());
+        let framebuffers = vkc::create_framebuffers(&device, &render_pass,
+            &image_views, swapchain.extent().clone());
+        let command_pool = CommandPool::new(device.clone(), &surface, queue_family_flags)?;
+        let command_buffers = vkc::create_command_buffers(&device, &command_pool, &render_pass,
+            &graphics_pipeline, &framebuffers, swapchain.extent())?;
 
-        App {
+        Ok(App {
             instance,
             window: window,
             events_loop: events_loop,
@@ -79,7 +88,10 @@ impl App {
             render_pass,
             pipeline_layout,
             graphics_pipeline,
-        }
+            framebuffers,
+            command_pool,
+            command_buffers,
+        })
     }
 
     unsafe fn main_loop(&mut self) {

@@ -5,12 +5,13 @@ use vk;
 use ::{util, Device, ShaderModule};
 
 
-
+#[derive(Debug)]
 struct Inner {
     handle: vk::RenderPass,
     device: Device,
 }
 
+#[derive(Debug, Clone)]
 pub struct RenderPass {
     inner: Arc<Inner>,
 }
@@ -72,7 +73,7 @@ impl RenderPass {
         }
     }
 
-    pub fn handle(&self) -> vk::ShaderModule {
+    pub fn handle(&self) -> vk::RenderPass {
         self.inner.handle
     }
 

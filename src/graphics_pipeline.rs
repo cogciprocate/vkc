@@ -1,7 +1,4 @@
 
-
-
-
 use std::sync::Arc;
 use std::ptr;
 use std::ffi::CStr;
@@ -9,12 +6,13 @@ use vk;
 use ::{util, Device, ShaderModule, PipelineLayout, RenderPass};
 
 
-
+#[derive(Debug)]
 struct Inner {
     handle: vk::Pipeline,
     device: Device,
 }
 
+#[derive(Debug, Clone)]
 pub struct GraphicsPipeline {
     inner: Arc<Inner>,
 }
@@ -209,7 +207,7 @@ impl GraphicsPipeline {
         }
     }
 
-    pub fn handle(&self) -> vk::ShaderModule {
+    pub fn handle(&self) -> vk::Pipeline {
         self.inner.handle
     }
 

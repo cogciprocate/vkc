@@ -5,11 +5,13 @@ use vk;
 use ::{util, Device, ShaderModule};
 
 
+#[derive(Debug)]
 struct Inner {
     handle: vk::PipelineLayout,
     device: Device,
 }
 
+#[derive(Debug, Clone)]
 pub struct PipelineLayout {
     inner: Arc<Inner>,
 }
@@ -40,7 +42,7 @@ impl PipelineLayout {
         }
     }
 
-    pub fn handle(&self) -> vk::ShaderModule {
+    pub fn handle(&self) -> vk::PipelineLayout {
         self.inner.handle
     }
 

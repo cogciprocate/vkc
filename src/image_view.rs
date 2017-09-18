@@ -4,11 +4,14 @@ use std::ptr;
 use vk;
 use ::{Swapchain};
 
+
+#[derive(Debug)]
 pub struct Inner {
     handle: vk::ImageView,
     swapchain: Swapchain,
 }
 
+#[derive(Debug, Clone)]
 pub struct ImageView {
     inner: Arc<Inner>,
 }
@@ -50,6 +53,14 @@ impl ImageView {
                 swapchain: swapchain,
             })
         }
+    }
+
+    pub fn handle(&self) -> vk::ImageView {
+        self.inner.handle
+    }
+
+    pub fn swapchain(&self) -> &Swapchain {
+        &self.inner.swapchain
     }
 }
 

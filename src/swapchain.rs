@@ -150,7 +150,7 @@ impl Swapchain {
             p_queue_family_indices = ptr::null(); // Optional
         }
 
-        let image_extent = vk::Extent2D { width: extent.width, height: extent.height };
+        // let image_extent = vk::Extent2D { width: extent.width, height: extent.height };
 
         let create_info = vk::SwapchainCreateInfoKHR {
             sType: vk::STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -160,7 +160,7 @@ impl Swapchain {
             minImageCount: image_count,
             imageFormat: surface_format.format,
             imageColorSpace: surface_format.colorSpace,
-            imageExtent: image_extent,
+            imageExtent: extent.clone(),
             imageArrayLayers: 1,
             imageUsage: vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
             imageSharingMode: image_sharing_mode,
@@ -207,8 +207,9 @@ impl Swapchain {
         self.inner.image_format
     }
 
-    pub fn extent(&self) -> vk::Extent2D {
-        vk::Extent2D { width: self.inner.extent.width, height: self.inner.extent.height }
+    pub fn extent(&self) -> &vk::Extent2D {
+        // vk::Extent2D { width: self.inner.extent.width, height: self.inner.extent.height }
+        &self.inner.extent
     }
 
     pub fn handle(&self) -> vk::ShaderModule {
