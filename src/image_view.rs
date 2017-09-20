@@ -2,12 +2,13 @@
 use std::sync::Arc;
 use std::ptr;
 use vk;
+use vks;
 use ::{VkcResult, Swapchain};
 
 
 #[derive(Debug)]
 pub struct Inner {
-    handle: vk::ImageView,
+    handle: vk::VkImageView,
     swapchain: Swapchain,
 }
 
@@ -17,22 +18,22 @@ pub struct ImageView {
 }
 
 impl ImageView {
-    pub fn new(swapchain: Swapchain, image: vk::Image) -> VkcResult<ImageView> {
-        let create_info = vk::ImageViewCreateInfo {
-            sType: vk::STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+    pub fn new(swapchain: Swapchain, image: vk::VkImage) -> VkcResult<ImageView> {
+        let create_info = vk::VkImageViewCreateInfo {
+            sType: vk::VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
             image: image,
-            viewType: vk::IMAGE_VIEW_TYPE_2D,
+            viewType: vk::VK_IMAGE_VIEW_TYPE_2D,
             format: swapchain.image_format(),
-            components: vk::ComponentMapping {
-                r: vk::COMPONENT_SWIZZLE_IDENTITY,
-                g: vk::COMPONENT_SWIZZLE_IDENTITY,
-                b: vk::COMPONENT_SWIZZLE_IDENTITY,
-                a: vk::COMPONENT_SWIZZLE_IDENTITY,
+            components: vk::VkComponentMapping {
+                r: vk::VK_COMPONENT_SWIZZLE_IDENTITY,
+                g: vk::VK_COMPONENT_SWIZZLE_IDENTITY,
+                b: vk::VK_COMPONENT_SWIZZLE_IDENTITY,
+                a: vk::VK_COMPONENT_SWIZZLE_IDENTITY,
             },
-            subresourceRange: vk::ImageSubresourceRange {
-                aspectMask: vk::IMAGE_ASPECT_COLOR_BIT,
+            subresourceRange: vk::VkImageSubresourceRange {
+                aspectMask: vk::VK_IMAGE_ASPECT_COLOR_BIT,
                 baseMipLevel: 0,
                 levelCount: 1,
                 baseArrayLayer: 0,
@@ -43,7 +44,7 @@ impl ImageView {
         let mut handle = 0;
 
         unsafe {
-            ::check(swapchain.device().vk().CreateImageView(swapchain.device().handle(),
+            ::check(swapchain.device().vk().core.vkCreateImageView(swapchain.device().handle(),
                 &create_info, ptr::null(), &mut handle));
         }
 
@@ -55,7 +56,7 @@ impl ImageView {
         })
     }
 
-    pub fn handle(&self) -> vk::ImageView {
+    pub fn handle(&self) -> vk::VkImageView {
         self.inner.handle
     }
 
@@ -67,7 +68,7 @@ impl ImageView {
 impl Drop for Inner {
     fn drop(&mut self) {
         unsafe {
-            self.swapchain.device().vk().DestroyImageView(self.swapchain.device().handle(),
+            self.swapchain.device().vk().core.vkDestroyImageView(self.swapchain.device().handle(),
                 self.handle, ptr::null());
         }
     }

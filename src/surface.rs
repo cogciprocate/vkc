@@ -1,15 +1,16 @@
-use std::os::raw::c_void;
+use libc::c_void;
 use std::ptr;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use winit;
 use vk;
+use vks;
 use ::{VkcResult, Instance};
 
 
 #[derive(Debug)]
 struct Inner {
-    handle: vk::SurfaceKHR,
+    handle: vks::khr_surface::VkSurfaceKHR,
     instance: Instance,
     active: AtomicBool,
 }
@@ -24,16 +25,16 @@ impl Surface {
         use winit::os::windows::WindowExt;
         let mut handle = 0;
 
-        let create_info = vk::Win32SurfaceCreateInfoKHR {
-            sType: vk::STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+        let create_info = vks::khr_win32_surface::VkWin32SurfaceCreateInfoKHR {
+            sType: vk::VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
             pNext: ptr::null(),
             flags: 0,
             hinstance: ptr::null_mut(),
-            hwnd: window.get_hwnd() as *mut c_void,
+            hwnd: window.get_hwnd() as *mut vks::win32_types::HWND_T,
         };
 
         unsafe {
-            ::check(instance.vk().CreateWin32SurfaceKHR(instance.handle(), &create_info, ptr::null(),
+            ::check(instance.vk().khr_win32_surface.vkCreateWin32SurfaceKHR(instance.handle(), &create_info, ptr::null(),
                 &mut handle));
         }
 
@@ -46,7 +47,7 @@ impl Surface {
         })
     }
 
-    pub fn handle(&self) -> vk::SurfaceKHR {
+    pub fn handle(&self) -> vk::VkSurfaceKHR {
         self.inner.handle
     }
 }
@@ -55,7 +56,7 @@ impl Drop for Inner {
     fn drop(&mut self) {
         unsafe {
             println!("Destroying surface...");
-            self.instance.vk().DestroySurfaceKHR(self.instance.handle(), self.handle, ptr::null());
+            self.instance.vk().khr_surface.vkDestroySurfaceKHR(self.instance.handle(), self.handle, ptr::null());
         }
     }
 }

@@ -2,12 +2,13 @@ use std::sync::Arc;
 use std::ffi::CStr;
 use std::ptr;
 use vk;
+use vks;
 use ::{util, VkcResult, Device, ShaderModule};
 
 
 #[derive(Debug)]
 struct Inner {
-    handle: vk::RenderPass,
+    handle: vk::VkRenderPass,
     device: Device,
 }
 
@@ -17,27 +18,27 @@ pub struct RenderPass {
 }
 
 impl RenderPass {
-    pub fn new(device: Device, swap_chain_image_format: vk::Format) -> VkcResult<RenderPass> {
-        let color_attachment = vk::AttachmentDescription {
+    pub fn new(device: Device, swap_chain_image_format: vk::VkFormat) -> VkcResult<RenderPass> {
+        let color_attachment = vk::VkAttachmentDescription {
             flags: 0,
             format: swap_chain_image_format,
-            samples: vk::SAMPLE_COUNT_1_BIT,
-            loadOp: vk::ATTACHMENT_LOAD_OP_CLEAR,
-            storeOp: vk::ATTACHMENT_STORE_OP_STORE,
-            stencilLoadOp: vk::ATTACHMENT_LOAD_OP_DONT_CARE,
-            stencilStoreOp: vk::ATTACHMENT_STORE_OP_DONT_CARE,
-            initialLayout: vk::IMAGE_LAYOUT_UNDEFINED,
-            finalLayout: vk::IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            samples: vk::VK_SAMPLE_COUNT_1_BIT,
+            loadOp: vk::VK_ATTACHMENT_LOAD_OP_CLEAR,
+            storeOp: vk::VK_ATTACHMENT_STORE_OP_STORE,
+            stencilLoadOp: vk::VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            stencilStoreOp: vk::VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            initialLayout: vk::VK_IMAGE_LAYOUT_UNDEFINED,
+            finalLayout: vk::VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         };
 
-        let color_attachment_ref = vk::AttachmentReference {
+        let color_attachment_ref = vk::VkAttachmentReference {
             attachment: 0,
-            layout: vk::IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            layout: vk::VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         };
 
-        let subpass = vk::SubpassDescription {
+        let subpass = vk::VkSubpassDescription {
             flags: 0,
-            pipelineBindPoint: vk::PIPELINE_BIND_POINT_GRAPHICS,
+            pipelineBindPoint: vk::VK_PIPELINE_BIND_POINT_GRAPHICS,
             inputAttachmentCount: 0,
             pInputAttachments: ptr::null(),
             colorAttachmentCount: 1,
@@ -48,18 +49,18 @@ impl RenderPass {
             pPreserveAttachments: ptr::null(),
         };
 
-        let dependency = vk::SubpassDependency {
+        let dependency = vk::VkSubpassDependency {
             dependencyFlags: 0,
-            srcSubpass: vk::SUBPASS_EXTERNAL,
+            srcSubpass: vk::VK_SUBPASS_EXTERNAL,
             dstSubpass: 0,
-            srcStageMask: vk::PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            srcStageMask: vk::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             srcAccessMask: 0,
-            dstStageMask: vk::PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            dstAccessMask: vk::ACCESS_COLOR_ATTACHMENT_READ_BIT | vk::ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            dstStageMask: vk::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            dstAccessMask: vk::VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | vk::VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
         };
 
-        let render_pass_info = vk::RenderPassCreateInfo {
-            sType: vk::STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        let render_pass_info = vk::VkRenderPassCreateInfo {
+            sType: vk::VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
             attachmentCount: 1,
@@ -72,7 +73,7 @@ impl RenderPass {
 
         let mut handle = 0;
         unsafe {
-            ::check(device.vk().CreateRenderPass(device.handle(), &render_pass_info, ptr::null(), &mut handle));
+            ::check(device.vk().core.vkCreateRenderPass(device.handle(), &render_pass_info, ptr::null(), &mut handle));
         }
 
         Ok(RenderPass {
@@ -83,7 +84,7 @@ impl RenderPass {
         })
     }
 
-    pub fn handle(&self) -> vk::RenderPass {
+    pub fn handle(&self) -> vk::VkRenderPass {
         self.inner.handle
     }
 
@@ -95,7 +96,7 @@ impl RenderPass {
 impl Drop for Inner {
     fn drop(&mut self) {
         unsafe {
-            self.device.vk().DestroyRenderPass(self.device.handle(), self.handle, ptr::null());
+            self.device.vk().core.vkDestroyRenderPass(self.device.handle(), self.handle, ptr::null());
         }
     }
 }

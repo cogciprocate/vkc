@@ -2,12 +2,13 @@ use std::sync::Arc;
 use std::ffi::CStr;
 use std::ptr;
 use vk;
+use vks;
 use ::{util, VkcResult, Device, ShaderModule};
 
 
 #[derive(Debug)]
 struct Inner {
-    handle: vk::PipelineLayout,
+    handle: vk::VkPipelineLayout,
     device: Device,
 }
 
@@ -18,8 +19,8 @@ pub struct PipelineLayout {
 
 impl PipelineLayout {
     pub fn new(device: Device) -> VkcResult<PipelineLayout> {
-        let pipeline_layout_info = vk::PipelineLayoutCreateInfo {
-            sType: vk::STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        let pipeline_layout_info = vk::VkPipelineLayoutCreateInfo {
+            sType: vk::VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
             setLayoutCount: 0,
@@ -30,7 +31,7 @@ impl PipelineLayout {
 
         let mut handle = 0;
         unsafe {
-            ::check(device.vk().CreatePipelineLayout(device.handle(),
+            ::check(device.vk().core.vkCreatePipelineLayout(device.handle(),
                 &pipeline_layout_info, ptr::null(), &mut handle));
         }
 
@@ -42,7 +43,7 @@ impl PipelineLayout {
         })
     }
 
-    pub fn handle(&self) -> vk::PipelineLayout {
+    pub fn handle(&self) -> vk::VkPipelineLayout {
         self.inner.handle
     }
 
@@ -55,7 +56,7 @@ impl PipelineLayout {
 impl Drop for Inner {
     fn drop(&mut self) {
         unsafe {
-            self.device.vk().DestroyPipelineLayout(self.device.handle(), self.handle, ptr::null());
+            self.device.vk().core.vkDestroyPipelineLayout(self.device.handle(), self.handle, ptr::null());
         }
     }
 }

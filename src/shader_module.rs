@@ -5,12 +5,13 @@ use std::path::Path;
 use std::fs::File;
 use std::io::{Read, BufReader};
 use vk;
+use vks;
 use ::{VkcResult, Device};
 
 
 #[derive(Debug)]
 struct Inner {
-    handle: vk::ShaderModule,
+    handle: vk::VkShaderModule,
     device: Device,
 }
 
@@ -21,8 +22,8 @@ pub struct ShaderModule {
 
 impl ShaderModule {
     pub fn new(device: Device, code: &[u8]) -> VkcResult<ShaderModule> {
-        let create_info = vk::ShaderModuleCreateInfo {
-            sType: vk::STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        let create_info = vk::VkShaderModuleCreateInfo {
+            sType: vk::VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
             codeSize: code.len(),
@@ -31,7 +32,7 @@ impl ShaderModule {
 
         let mut handle = 0;
         unsafe {
-            ::check(device.vk().CreateShaderModule(device.handle(), &create_info,
+            ::check(device.vk().core.vkCreateShaderModule(device.handle(), &create_info,
                 ptr::null(), &mut handle));
         }
 
@@ -43,7 +44,7 @@ impl ShaderModule {
         })
     }
 
-    pub fn handle(&self) -> vk::ShaderModule {
+    pub fn handle(&self) -> vk::VkShaderModule {
         self.inner.handle
     }
 
@@ -55,7 +56,7 @@ impl ShaderModule {
 impl Drop for Inner {
     fn drop(&mut self) {
         unsafe {
-            self.device.vk().DestroyShaderModule(self.device.handle(), self.handle, ptr::null());
+            self.device.vk().core.vkDestroyShaderModule(self.device.handle(), self.handle, ptr::null());
         }
     }
 }

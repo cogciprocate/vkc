@@ -3,25 +3,19 @@ use std::mem;
 use std::ptr;
 use std::fmt;
 use lib;
-use vk;
-use ::VkcResult;
-
-
-type ProcAddrFnSym<'lib> = lib::Symbol<'lib, extern "system" fn(instance: vk::Instance, pName: *const i8)
-    -> extern "system" fn() -> ()>;
-
-type ProcAddrFnRaw = extern "system" fn(instance: vk::Instance, pName: *const i8)
-    -> extern "system" fn() -> ();
-
+use vks;
+use vk::{self, PFN_vkGetInstanceProcAddr};
+use ::{VkcResult, ENABLE_VALIDATION_LAYERS};
 
 pub struct Loader {
     vk_lib: lib::Library,
-    get_proc_addr: ProcAddrFnRaw,
-    entry_points: vk::EntryPoints,
+    vk_get_instance_proc_addr: vk::PFN_vkGetInstanceProcAddr,
+    // entry_points: vk::VkEntryPoints,
+    loader: vks::InstanceProcAddrLoader,
 }
 
 impl Loader {
-    pub unsafe fn new() -> VkcResult<Loader> {
+    pub fn new() -> VkcResult<Loader> {
         let lib_filename = if cfg!(not(any(target_os = "macos", target_os = "ios"))) {
             if cfg!(all(unix, not(target_os = "android"), not(target_os = "macos"))) { "libvulkan.so.1" }
             else if cfg!(target_os = "android") { "libvulkan.so" }
@@ -30,28 +24,44 @@ impl Loader {
         } else {
             unimplemented!("macos not implemented");
         };
-
         let vk_lib = lib::Library::new(lib_filename).unwrap();
-        let fn_name = b"vkGetInstanceProcAddr";
-        let get_proc_addr: ProcAddrFnRaw = {
-            let get_proc_addr: lib::Symbol<ProcAddrFnSym> = vk_lib.get(&fn_name[..]).unwrap();
-            mem::transmute(get_proc_addr)
+
+        let vk_get_instance_proc_addr = unsafe {
+            let fn_name = "vkGetInstanceProcAddr";
+
+            let get_proc_addr: lib::Symbol<vk::PFN_vkGetInstanceProcAddr> = vk_lib.get(fn_name.as_bytes()).unwrap();
+            *get_proc_addr
         };
-        let entry_points = vk::EntryPoints::load(|name|
-            mem::transmute((get_proc_addr)(0, name.as_ptr())));
-        Ok(Loader { vk_lib, get_proc_addr, entry_points })
+
+        let mut loader = vks::InstanceProcAddrLoader::from_get_instance_proc_addr(vk_get_instance_proc_addr);
+        unsafe {
+            loader.load_core_global();
+        }
+
+        Ok(Loader { vk_lib, vk_get_instance_proc_addr, loader })
     }
 
     #[inline]
-    pub fn get_instance_proc_addr(&self, instance: vk::Instance, name: *const i8)
-            -> extern "system" fn() -> ()
+    pub fn get_instance_proc_addr(&self, instance: vk::VkInstance, name: *const i8)
+            -> Option<unsafe extern "system" fn(*mut vk::VkInstance_T, *const i8)
+                -> Option<unsafe extern "system" fn()>>
     {
-        (self.get_proc_addr)(instance, name)
+        self.vk_get_instance_proc_addr
     }
 
     #[inline]
-    pub fn entry_points(&self) -> &vk::EntryPoints {
-        &self.entry_points
+    pub fn core_global(&self) -> &vks::instance_proc_addr_loader::CoreGlobal {
+        &self.loader.core_global
+    }
+
+    #[inline]
+    pub fn loader(&self) -> &vks::InstanceProcAddrLoader {
+        &self.loader
+    }
+
+    #[inline]
+    pub fn loader_mut(&mut self) -> &mut vks::InstanceProcAddrLoader {
+        &mut self.loader
     }
 
 }

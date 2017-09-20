@@ -2,19 +2,14 @@ use std::sync::Arc;
 use std::ffi::{self, CStr};
 use std::ptr;
 use std::mem;
-use std::os::raw::{c_char, c_void};
+use libc::{c_char, c_void};
 use vk;
-use ::{VkcResult, Loader};
+use ::{VkcResult, Loader, ENABLE_VALIDATION_LAYERS};
 
 
 static VALIDATION_LAYERS: [&[u8]; 1] = [
     b"VK_LAYER_LUNARG_standard_validation\0"
 ];
-
-#[cfg(debug_assertions)]
-const ENABLE_VALIDATION_LAYERS: bool = true;
-#[cfg(not(debug_assertions))]
-const ENABLE_VALIDATION_LAYERS: bool = false;
 
 static REQUIRED_EXTENSIONS: [&[u8]; 2] = [
     b"VK_KHR_surface",
@@ -22,31 +17,29 @@ static REQUIRED_EXTENSIONS: [&[u8]; 2] = [
 ];
 
 
-extern "system" fn __debug_callback(_flags: vk::DebugReportFlagsEXT,
-        _obj_type: vk::DebugReportObjectTypeEXT, _obj: u64, _location: usize, _code: i32,
+unsafe extern "system" fn __debug_callback(_flags: vk::VkDebugReportFlagsEXT,
+        _obj_type: vk::VkDebugReportObjectTypeEXT, _obj: u64, _location: usize, _code: i32,
         _layer_prefix: *const c_char, msg: *const c_char, _user_data: *mut c_void) -> u32
 {
-    unsafe {
-        println!("{}", CStr::from_ptr(msg).to_str().unwrap());
-    }
-    vk::FALSE
+    println!("{}", CStr::from_ptr(msg).to_str().unwrap());
+    vk::VK_FALSE
 }
 
 
 // fn create_debug_report_callback_ext(instance: &Instance,
-//         create_info: &vk::DebugReportCallbackCreateInfoEXT, allocator: vk::DebugReportCallbackEXT)
+//         create_info: &vk::VkDebugReportCallbackCreateInfoEXT, allocator: vk::VkDebugReportCallbackEXT)
 // {
 //     let create_drcb = instance.get_instance_proc_addr(b"vkCreateDebugReportCallbackEXT".as_ptr() as *const i8);
 // }
 
 fn check_validation_layer_support(loader: &Loader, print: bool) -> bool {
     let mut layer_count = 0u32;
-    let mut available_layers: Vec<vk::LayerProperties>;
+    let mut available_layers: Vec<vk::VkLayerProperties>;
     unsafe {
-        ::check(loader.entry_points().EnumerateInstanceLayerProperties(&mut layer_count, ptr::null_mut()));
+        ::check(loader.core_global().vkEnumerateInstanceLayerProperties(&mut layer_count, ptr::null_mut()));
         available_layers = Vec::with_capacity(layer_count as usize);
         available_layers.set_len(layer_count as usize);
-        ::check(loader.entry_points().EnumerateInstanceLayerProperties(&mut layer_count, available_layers.as_mut_ptr()));
+        ::check(loader.core_global().vkEnumerateInstanceLayerProperties(&mut layer_count, available_layers.as_mut_ptr()));
 
         // Print available layers:
         if print {
@@ -76,16 +69,16 @@ fn check_validation_layer_support(loader: &Loader, print: bool) -> bool {
 }
 
 /// Currently returns all available extensions.
-fn enumerate_instance_extension_properties(loader: &Loader) -> Vec<vk::ExtensionProperties> {
+fn enumerate_instance_extension_properties(loader: &Loader) -> Vec<vk::VkExtensionProperties> {
     let mut avail_ext_count = 0u32;
-    let mut avail_exts: Vec<vk::ExtensionProperties>;
+    let mut avail_exts: Vec<vk::VkExtensionProperties>;
     unsafe {
-        ::check(loader.entry_points().EnumerateInstanceExtensionProperties(ptr::null(),
+        ::check(loader.core_global().vkEnumerateInstanceExtensionProperties(ptr::null(),
             &mut avail_ext_count, ptr::null_mut()));
 
         avail_exts = Vec::with_capacity(avail_ext_count as usize);
         avail_exts.set_len(avail_ext_count as usize);
-        ::check(loader.entry_points().EnumerateInstanceExtensionProperties(ptr::null(),
+        ::check(loader.core_global().vkEnumerateInstanceExtensionProperties(ptr::null(),
             &mut avail_ext_count, avail_exts.as_mut_ptr()));
 
         // Print available:
@@ -99,7 +92,7 @@ fn enumerate_instance_extension_properties(loader: &Loader) -> Vec<vk::Extension
     avail_exts
 }
 
-unsafe fn extension_names<'a>(extensions: &'a [vk::ExtensionProperties]) -> Vec<*const c_char> {
+unsafe fn extension_names<'a>(extensions: &'a [vk::VkExtensionProperties]) -> Vec<*const c_char> {
     extensions.iter().map(|ext| {
         let name = (&ext.extensionName) as *const c_char;
         println!("Enabling instance extension: '{}' (version: {})",
@@ -108,13 +101,13 @@ unsafe fn extension_names<'a>(extensions: &'a [vk::ExtensionProperties]) -> Vec<
         }).collect()
 }
 
-unsafe fn enumerate_physical_devices(instance: vk::Instance, vk: &vk::InstancePointers) -> Vec<vk::PhysicalDevice> {
+unsafe fn enumerate_physical_devices(instance: vk::VkInstance, loader: &vk::InstanceProcAddrLoader) -> Vec<vk::VkPhysicalDevice> {
     let mut device_count = 0;
-    ::check(vk.EnumeratePhysicalDevices(instance, &mut device_count, ptr::null_mut()));
+    ::check(loader.core.vkEnumeratePhysicalDevices(instance, &mut device_count, ptr::null_mut()));
     if device_count == 0 { panic!("No physical devices found."); }
     let mut devices = Vec::with_capacity(device_count as usize);
     devices.set_len(device_count as usize);
-    ::check(vk.EnumeratePhysicalDevices(instance, &mut device_count, devices.as_mut_ptr()));
+    ::check(loader.core.vkEnumeratePhysicalDevices(instance, &mut device_count, devices.as_mut_ptr()));
     println!("Available devices: {:?}", devices);
     devices
 }
@@ -134,11 +127,10 @@ pub fn enabled_layer_names(loader: &Loader, print: bool) -> Vec<*const c_char> {
 
 #[derive(Debug)]
 struct Inner {
-    handle: vk::Instance,
-    pub vk: vk::InstancePointers,
+    handle: vk::VkInstance,
     loader: Loader,
-    debug_callback: Option<vk::DebugReportCallbackEXT>,
-    physical_devices: Vec<vk::PhysicalDevice>,
+    debug_callback: Option<vk::VkDebugReportCallbackEXT>,
+    physical_devices: Vec<vk::VkPhysicalDevice>,
 }
 
 #[derive(Debug, Clone)]
@@ -147,8 +139,8 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub unsafe fn new(app_info: &vk::ApplicationInfo) -> VkcResult<Instance> {
-        let loader = Loader::new()?;
+    pub unsafe fn new(app_info: &vk::VkApplicationInfo) -> VkcResult<Instance> {
+        let mut loader = Loader::new()?;
 
         // Layers:
         let enabled_layer_names = enabled_layer_names(&loader, true);
@@ -158,8 +150,8 @@ impl Instance {
         let extension_names = extension_names(extensions.as_slice());
 
         // Instance:
-        let info = vk::InstanceCreateInfo {
-            sType: vk::STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+        let create_info = vk::VkInstanceCreateInfo {
+            sType: vk::VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
             pApplicationInfo: app_info,
@@ -169,24 +161,31 @@ impl Instance {
             ppEnabledExtensionNames:extension_names.as_ptr(),
         };
 
-        let mut handle = 0;
-        ::check(loader.entry_points().CreateInstance(&info, ptr::null(), &mut handle));
+        let mut handle = ptr::null_mut();
+        ::check(loader.core_global().vkCreateInstance(&create_info, ptr::null(), &mut handle));
+        // create_info.enabled_extensions.load_instance(&mut loader, handle); // DACITE WAY
 
-        // Function pointers:
-        let vk = vk::InstancePointers::load(|name|
-            mem::transmute(loader.get_instance_proc_addr(handle, name.as_ptr())));
+        // [FIXME: do this properly] Load extension function pointers:
+        loader.loader_mut().load_core(handle);
+        loader.loader_mut().load_khr_surface(handle);
+        loader.loader_mut().load_khr_win32_surface(handle);
+        loader.loader_mut().load_khr_get_physical_device_properties2(handle);
+        loader.loader_mut().load_khr_external_memory_capabilities(handle);
+        if ENABLE_VALIDATION_LAYERS { loader.loader_mut().load_ext_debug_report(handle); }
 
         let debug_callback = if ENABLE_VALIDATION_LAYERS {
-            let create_info = vk::DebugReportCallbackCreateInfoEXT {
-                sType:  vk::STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
+            let create_info = vk::VkDebugReportCallbackCreateInfoEXT {
+                sType:  vk::VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
                 pNext: ptr::null(),
-                flags: vk::DEBUG_REPORT_ERROR_BIT_EXT | vk::DEBUG_REPORT_WARNING_BIT_EXT,
-                pfnCallback: __debug_callback,
+                flags: vk::VK_DEBUG_REPORT_ERROR_BIT_EXT | vk::VK_DEBUG_REPORT_WARNING_BIT_EXT,
+                pfnCallback: Some(__debug_callback),
                 pUserData: ptr::null_mut(),
             };
 
-            let mut callback: vk::DebugReportCallbackEXT = 0;
-            if vk.CreateDebugReportCallbackEXT(handle, &create_info, ptr::null(), &mut callback) != vk::SUCCESS {
+            let mut callback: vk::VkDebugReportCallbackEXT = 0;
+            if loader.loader().ext_debug_report.vkCreateDebugReportCallbackEXT(handle,
+                    &create_info, ptr::null(), &mut callback) != vk::VK_SUCCESS
+            {
                 panic!("failed to set up debug callback");
             } else {
                 println!("Debug report callback initialized.");
@@ -197,12 +196,11 @@ impl Instance {
         };
 
         // Device:
-        let physical_devices = enumerate_physical_devices(handle, &vk);
+        let physical_devices = enumerate_physical_devices(handle, loader.loader());
 
         Ok(Instance {
             inner: Arc::new(Inner {
                 handle,
-                vk,
                 loader,
                 debug_callback,
                 physical_devices,
@@ -211,12 +209,12 @@ impl Instance {
     }
 
     #[inline]
-    pub fn vk(&self) -> &vk::InstancePointers {
-        &self.inner.vk
+    pub fn vk(&self) -> &vk::InstanceProcAddrLoader {
+        self.inner.loader.loader()
     }
 
     #[inline]
-    pub fn handle(&self) -> vk::Instance {
+    pub fn handle(&self) -> vk::VkInstance {
         self.inner.handle
     }
 
@@ -226,7 +224,7 @@ impl Instance {
     }
 
     #[inline]
-    pub fn physical_devices(&self) -> &[vk::PhysicalDevice] {
+    pub fn physical_devices(&self) -> &[vk::VkPhysicalDevice] {
         self.inner.physical_devices.as_slice()
     }
 
@@ -241,11 +239,11 @@ impl Drop for Inner {
         unsafe {
             println!("Destroying debug callback...");
             if let Some(callback) = self.debug_callback {
-                self.vk.DestroyDebugReportCallbackEXT(self.handle, callback, ptr::null());
+                self.loader.loader().ext_debug_report.vkDestroyDebugReportCallbackEXT(self.handle, callback, ptr::null());
             }
 
             println!("Destroying instance...");
-            self.vk.DestroyInstance(self.handle, ptr::null());
+            self.loader.loader().core.vkDestroyInstance(self.handle, ptr::null());
         }
     }
 }

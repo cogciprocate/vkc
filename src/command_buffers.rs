@@ -1,13 +1,14 @@
 use std::sync::Arc;
 use std::ptr;
 use vk;
+use vks;
 use ::{util, VkcResult, Device, Framebuffer, CommandPool, RenderPass, GraphicsPipeline};
 
 
 
 // #[derive(Debug, Clone)]
 // pub struct CommandBuffer {
-//     handle: vk::CommandBuffer,
+//     handle: vk::VkCommandBuffer,
 //     device: Device,
 // }
 
@@ -26,7 +27,7 @@ use ::{util, VkcResult, Device, Framebuffer, CommandPool, RenderPass, GraphicsPi
 //         })
 //     }
 
-//     pub fn handle(&self) -> vk::CommandBuffer {
+//     pub fn handle(&self) -> vk::VkCommandBuffer {
 //         self.inner.handle
 //     }
 
@@ -83,34 +84,34 @@ use ::{util, VkcResult, Device, Framebuffer, CommandPool, RenderPass, GraphicsPi
 
 pub fn create_command_buffers(device: &Device, command_pool: &CommandPool,
         render_pass: &RenderPass, graphics_pipeline: &GraphicsPipeline,
-        swapchain_framebuffers: &[Framebuffer], swapchain_extent: &vk::Extent2D)
-        -> VkcResult<Vec<vk::CommandBuffer>>
+        swapchain_framebuffers: &[Framebuffer], swapchain_extent: &vk::VkExtent2D)
+        -> VkcResult<Vec<vk::VkCommandBuffer>>
 {
     let mut command_buffers = Vec::with_capacity(swapchain_framebuffers.len());
     unsafe { command_buffers.set_len(swapchain_framebuffers.len()); }
 
-    let alloc_info = vk::CommandBufferAllocateInfo {
-        sType: vk::STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+    let alloc_info = vk::VkCommandBufferAllocateInfo {
+        sType: vk::VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         pNext: ptr::null(),
         commandPool: command_pool.handle(),
         // * COMMAND_BUFFER_LEVEL_PRIMARY: Can be submitted to a queue for
         //   execution, but cannot be called from other command buffers.
         // * COMMAND_BUFFER_LEVEL_SECONDARY: Cannot be submitted directly, but
         //   can be called from primary command buffers.
-        level: vk::COMMAND_BUFFER_LEVEL_PRIMARY,
+        level: vk::VK_COMMAND_BUFFER_LEVEL_PRIMARY,
         commandBufferCount: command_buffers.len() as u32,
     };
 
     unsafe {
-        ::check(device.vk().AllocateCommandBuffers(device.handle(), &alloc_info,
+        ::check(device.vk().core.vkAllocateCommandBuffers(device.handle(), &alloc_info,
             command_buffers.as_mut_ptr()));
     }
 
     for (&command_buffer, swapchain_framebuffer) in command_buffers.iter()
             .zip(swapchain_framebuffers.iter())
     {
-        let begin_info = vk::CommandBufferBeginInfo {
-            sType: vk::STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        let begin_info = vk::VkCommandBufferBeginInfo {
+            sType: vk::VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
             pNext: ptr::null(),
             // * COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT: The command buffer
             //   will be rerecorded right after executing it once.
@@ -120,25 +121,25 @@ pub fn create_command_buffers(device: &Device, command_pool: &CommandPool,
             // * COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT: The command buffer
             //   can be resubmitted while it is also already pending
             //   execution.
-            flags: vk::COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT,
+            flags: vk::VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT,
             pInheritanceInfo: ptr::null(),
         };
 
         unsafe {
-            ::check(device.vk().BeginCommandBuffer(command_buffer, &begin_info));
+            ::check(device.vk().core.vkBeginCommandBuffer(command_buffer, &begin_info));
         }
 
-        let clear_color = vk::ClearValue {
-            color: vk::ClearColorValue { float32: [0.0f32, 0.0f32, 0.0f32, 1.0f32] }
+        let clear_color = vk::VkClearValue {
+            color: vk::VkClearColorValue { float32: [0.0f32, 0.0f32, 0.0f32, 1.0f32] }
         };
 
-        let render_pass_info = vk::RenderPassBeginInfo {
-            sType: vk::STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        let render_pass_info = vk::VkRenderPassBeginInfo {
+            sType: vk::VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             pNext: ptr::null(),
             renderPass: render_pass.handle(),
             framebuffer:swapchain_framebuffer.handle(),
-            renderArea: vk::Rect2D {
-                offset: vk::Offset2D { x: 0, y: 0, },
+            renderArea: vk::VkRect2D {
+                offset: vk::VkOffset2D { x: 0, y: 0, },
                 extent: swapchain_extent.clone(),
             },
             clearValueCount: 1,
@@ -146,9 +147,9 @@ pub fn create_command_buffers(device: &Device, command_pool: &CommandPool,
         };
 
         unsafe {
-            device.vk().CmdBeginRenderPass(command_buffer, &render_pass_info,
-                vk::SUBPASS_CONTENTS_INLINE);
-            device.vk().CmdBindPipeline(command_buffer, vk::PIPELINE_BIND_POINT_GRAPHICS,
+            device.vk().core.vkCmdBeginRenderPass(command_buffer, &render_pass_info,
+                vk::VK_SUBPASS_CONTENTS_INLINE);
+            device.vk().core.vkCmdBindPipeline(command_buffer, vk::VK_PIPELINE_BIND_POINT_GRAPHICS,
                 graphics_pipeline.handle());
             // * vertexCount: Even though we don't have a vertex buffer, we
             //   technically still have 3 vertices to draw.
@@ -158,9 +159,9 @@ pub fn create_command_buffers(device: &Device, command_pool: &CommandPool,
             //   defines the lowest value of gl_VertexIndex.
             // * firstInstance: Used as an offset for instanced rendering,
             //   defines the lowest value of gl_InstanceIndex.
-            device.vk().CmdDraw(command_buffer, 3, 1, 0, 0);
-            device.vk().CmdEndRenderPass(command_buffer);
-            device.vk().EndCommandBuffer(command_buffer);
+            device.vk().core.vkCmdDraw(command_buffer, 3, 1, 0, 0);
+            device.vk().core.vkCmdEndRenderPass(command_buffer);
+            device.vk().core.vkEndCommandBuffer(command_buffer);
         }
     }
     Ok(command_buffers)
@@ -173,7 +174,7 @@ pub fn create_command_buffers(device: &Device, command_pool: &CommandPool,
 
 // #[derive(Debug)]
 // struct Inner {
-//     handle: vk::CommandBuffer,
+//     handle: vk::VkCommandBuffer,
 //     device: Device,
 // }
 
@@ -199,7 +200,7 @@ pub fn create_command_buffers(device: &Device, command_pool: &CommandPool,
 //         })
 //     }
 
-//     pub fn handle(&self) -> vk::CommandBuffer {
+//     pub fn handle(&self) -> vk::VkCommandBuffer {
 //         self.inner.handle
 //     }
 

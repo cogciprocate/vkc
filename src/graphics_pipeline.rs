@@ -3,12 +3,13 @@ use std::sync::Arc;
 use std::ptr;
 use std::ffi::CStr;
 use vk;
-use ::{util, VkcResult, Device, ShaderModule, PipelineLayout, RenderPass};
+use vks;
+use ::{util, VkcResult, Device, ShaderModule, PipelineLayout, RenderPass, Vertex};
 
 
 #[derive(Debug)]
 struct Inner {
-    handle: vk::Pipeline,
+    handle: vk::VkPipeline,
     device: Device,
 }
 
@@ -19,7 +20,7 @@ pub struct GraphicsPipeline {
 
 impl GraphicsPipeline {
     pub fn new(device: Device, pipeline_layout: &PipelineLayout,
-            render_pass: &RenderPass, swap_chain_extent: vk::Extent2D) -> VkcResult<GraphicsPipeline>
+            render_pass: &RenderPass, swap_chain_extent: vk::VkExtent2D) -> VkcResult<GraphicsPipeline>
     {
         let vert_shader_code = util::read_file("/src/vkc/shaders/vert.spv")?;
         let frag_shader_code = util::read_file("/src/vkc/shaders/frag.spv")?;
@@ -29,21 +30,21 @@ impl GraphicsPipeline {
 
         let fn_name = unsafe { CStr::from_bytes_with_nul_unchecked(b"main\0") };
 
-        let vert_shader_stage_info = vk::PipelineShaderStageCreateInfo {
-            sType: vk::STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        let vert_shader_stage_info = vk::VkPipelineShaderStageCreateInfo {
+            sType: vk::VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
-            stage: vk::SHADER_STAGE_VERTEX_BIT,
+            stage: vk::VK_SHADER_STAGE_VERTEX_BIT,
             module: vert_shader_module.handle(),
             pName: fn_name.as_ptr(),
             pSpecializationInfo: ptr::null(),
         };
 
-        let frag_shader_stage_info = vk::PipelineShaderStageCreateInfo {
-            sType: vk::STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        let frag_shader_stage_info = vk::VkPipelineShaderStageCreateInfo {
+            sType: vk::VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
-            stage: vk::SHADER_STAGE_FRAGMENT_BIT,
+            stage: vk::VK_SHADER_STAGE_FRAGMENT_BIT,
             module: frag_shader_module.handle(),
             pName: fn_name.as_ptr(),
             pSpecializationInfo: ptr::null(),
@@ -51,18 +52,21 @@ impl GraphicsPipeline {
 
         let shader_stages = [vert_shader_stage_info, frag_shader_stage_info];
 
-        let vertex_input_info = vk::PipelineVertexInputStateCreateInfo {
-            sType: vk::STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        let binding_description = Vertex::binding_description();
+        let attribute_descriptions = Vertex::attribute_descriptions();
+
+        let vertex_input_info = vk::VkPipelineVertexInputStateCreateInfo {
+            sType: vk::VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
-            vertexBindingDescriptionCount: 0,
-            pVertexBindingDescriptions: ptr::null(),
-            vertexAttributeDescriptionCount: 0,
-            pVertexAttributeDescriptions: ptr::null(),
+            vertexBindingDescriptionCount: 1,
+            pVertexBindingDescriptions: &binding_description,
+            vertexAttributeDescriptionCount: attribute_descriptions.len() as u32,
+            pVertexAttributeDescriptions: attribute_descriptions.as_ptr(),
         };
 
-        let input_assembly = vk::PipelineInputAssemblyStateCreateInfo {
-            sType: vk::STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        let input_assembly = vk::VkPipelineInputAssemblyStateCreateInfo {
+            sType: vk::VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
             // * VK_PRIMITIVE_TOPOLOGY_POINT_LIST: points from vertices
@@ -75,11 +79,11 @@ impl GraphicsPipeline {
             // * VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP: the second and third
             //   vertex of every triangle are used as first two vertices of
             //   the next triangle
-            topology: vk::PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-            primitiveRestartEnable: vk::FALSE,
+            topology: vk::VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+            primitiveRestartEnable: vk::VK_FALSE,
         };
 
-        let viewport = vk::Viewport {
+        let viewport = vk::VkViewport {
             x: 0.0f32,
             y: 0.0f32,
             width: swap_chain_extent.width as f32,
@@ -88,16 +92,16 @@ impl GraphicsPipeline {
             maxDepth: 1.0f32,
         };
 
-        let scissor = vk::Rect2D {
-            offset: vk::Offset2D {
+        let scissor = vk::VkRect2D {
+            offset: vk::VkOffset2D {
                 x: 0,
                 y: 0,
             },
             extent: swap_chain_extent,
         };
 
-        let viewport_state = vk::PipelineViewportStateCreateInfo {
-            sType: vk::STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        let viewport_state = vk::VkPipelineViewportStateCreateInfo {
+            sType: vk::VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
             viewportCount: 1,
@@ -106,65 +110,65 @@ impl GraphicsPipeline {
             pScissors: &scissor,
         };
 
-        let rasterizer = vk::PipelineRasterizationStateCreateInfo {
-            sType: vk::STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        let rasterizer = vk::VkPipelineRasterizationStateCreateInfo {
+            sType: vk::VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
-            depthClampEnable: vk::FALSE,
-            rasterizerDiscardEnable: vk::FALSE,
-            polygonMode: vk::POLYGON_MODE_FILL,
-            cullMode: vk::CULL_MODE_BACK_BIT,
-            frontFace: vk::FRONT_FACE_CLOCKWISE,
-            depthBiasEnable: vk::FALSE,
+            depthClampEnable: vk::VK_FALSE,
+            rasterizerDiscardEnable: vk::VK_FALSE,
+            polygonMode: vk::VK_POLYGON_MODE_FILL,
+            cullMode: vk::VK_CULL_MODE_BACK_BIT,
+            frontFace: vk::VK_FRONT_FACE_CLOCKWISE,
+            depthBiasEnable: vk::VK_FALSE,
             depthBiasConstantFactor: 0.0f32,
             depthBiasClamp: 0.0f32,
             depthBiasSlopeFactor: 0.0f32,
             lineWidth: 1.0f32,
         };
 
-        let multisampling = vk::PipelineMultisampleStateCreateInfo {
-            sType: vk::STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        let multisampling = vk::VkPipelineMultisampleStateCreateInfo {
+            sType: vk::VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
-            rasterizationSamples: vk::SAMPLE_COUNT_1_BIT,
-            sampleShadingEnable: vk::FALSE,
+            rasterizationSamples: vk::VK_SAMPLE_COUNT_1_BIT,
+            sampleShadingEnable: vk::VK_FALSE,
             minSampleShading: 1.0f32,
             pSampleMask: ptr::null(),
-            alphaToCoverageEnable: vk::FALSE,
-            alphaToOneEnable: vk::FALSE,
+            alphaToCoverageEnable: vk::VK_FALSE,
+            alphaToOneEnable: vk::VK_FALSE,
         };
 
-        let color_blend_attachment = vk::PipelineColorBlendAttachmentState {
-            blendEnable: vk::FALSE,
-            srcColorBlendFactor: vk::BLEND_FACTOR_ONE,
-            dstColorBlendFactor: vk::BLEND_FACTOR_ZERO,
-            colorBlendOp: vk::BLEND_OP_ADD,
-            srcAlphaBlendFactor: vk::BLEND_FACTOR_ONE,
-            dstAlphaBlendFactor: vk::BLEND_FACTOR_ZERO,
-            alphaBlendOp: vk::BLEND_OP_ADD,
-            colorWriteMask: vk::COLOR_COMPONENT_R_BIT | vk::COLOR_COMPONENT_G_BIT | vk::COLOR_COMPONENT_B_BIT | vk::COLOR_COMPONENT_A_BIT,
+        let color_blend_attachment = vk::VkPipelineColorBlendAttachmentState {
+            blendEnable: vk::VK_FALSE,
+            srcColorBlendFactor: vk::VK_BLEND_FACTOR_ONE,
+            dstColorBlendFactor: vk::VK_BLEND_FACTOR_ZERO,
+            colorBlendOp: vk::VK_BLEND_OP_ADD,
+            srcAlphaBlendFactor: vk::VK_BLEND_FACTOR_ONE,
+            dstAlphaBlendFactor: vk::VK_BLEND_FACTOR_ZERO,
+            alphaBlendOp: vk::VK_BLEND_OP_ADD,
+            colorWriteMask: vk::VK_COLOR_COMPONENT_R_BIT | vk::VK_COLOR_COMPONENT_G_BIT | vk::VK_COLOR_COMPONENT_B_BIT | vk::VK_COLOR_COMPONENT_A_BIT,
         };
 
         // ///////////////////////////////////////////////
         // /////////// KEEPME (ALPHA BLENDING) ///////////
-        // let color_blend_attachment = vk::PipelineColorBlendAttachmentState {
-        //     blendEnable: vk::FALSE,
-        //     srcColorBlendFactor: vk::BLEND_FACTOR_SRC_ALPHA,
-        //     dstColorBlendFactor: vk::BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-        //     colorBlendOp: vk::BLEND_OP_ADD,
-        //     srcAlphaBlendFactor: vk::BLEND_FACTOR_ONE,
-        //     dstAlphaBlendFactor: vk::BLEND_FACTOR_ZERO,
-        //     alphaBlendOp: vk::BLEND_OP_ADD,
-        //     colorWriteMask: vk::COLOR_COMPONENT_R_BIT | vk::COLOR_COMPONENT_G_BIT | vk::COLOR_COMPONENT_B_BIT | vk::COLOR_COMPONENT_A_BIT,
+        // let color_blend_attachment = vk::VkPipelineColorBlendAttachmentState {
+        //     blendEnable: vk::VK_FALSE,
+        //     srcColorBlendFactor: vk::VK_BLEND_FACTOR_SRC_ALPHA,
+        //     dstColorBlendFactor: vk::VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        //     colorBlendOp: vk::VK_BLEND_OP_ADD,
+        //     srcAlphaBlendFactor: vk::VK_BLEND_FACTOR_ONE,
+        //     dstAlphaBlendFactor: vk::VK_BLEND_FACTOR_ZERO,
+        //     alphaBlendOp: vk::VK_BLEND_OP_ADD,
+        //     colorWriteMask: vk::VK_COLOR_COMPONENT_R_BIT | vk::VK_COLOR_COMPONENT_G_BIT | vk::VK_COLOR_COMPONENT_B_BIT | vk::VK_COLOR_COMPONENT_A_BIT,
         // }; ////////////////////////////////////////////
         // ///////////////////////////////////////////////
 
-        let color_blending = vk::PipelineColorBlendStateCreateInfo {
-            sType: vk::STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        let color_blending = vk::VkPipelineColorBlendStateCreateInfo {
+            sType: vk::VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
-            logicOpEnable: vk::FALSE,
-            logicOp: vk::LOGIC_OP_COPY,
+            logicOpEnable: vk::VK_FALSE,
+            logicOp: vk::VK_LOGIC_OP_COPY,
             attachmentCount: 1,
             pAttachments: &color_blend_attachment,
             blendConstants: [0.0f32; 4],
@@ -172,9 +176,9 @@ impl GraphicsPipeline {
 
         // ///////////////////////////////////////////////
         // /////////// KEEPME (DYNAMIC STATES) ///////////
-        // let dynamic_states = [vk::DYNAMIC_STATE_VIEWPORT, vk::DYNAMIC_STATE_LINE_WIDTH];
-        // let dynamic_state = vk::PipelineDynamicStateCreateInfo {
-        //     sType: vk::STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+        // let dynamic_states = [vk::VK_DYNAMIC_STATE_VIEWPORT, vk::VK_DYNAMIC_STATE_LINE_WIDTH];
+        // let dynamic_state = vk::VkPipelineDynamicStateCreateInfo {
+        //     sType: vk::VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
         //     pNext: ptr::null(),
         //     flags: 0,
         //     dynamicStateCount: 2,
@@ -182,8 +186,8 @@ impl GraphicsPipeline {
         // }; ////////////////////////////////////////////
         // ///////////////////////////////////////////////
 
-        let create_info = vk::GraphicsPipelineCreateInfo {
-            sType: vk::STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        let create_info = vk::VkGraphicsPipelineCreateInfo {
+            sType: vk::VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
             stageCount: 2,
@@ -207,7 +211,7 @@ impl GraphicsPipeline {
 
         let mut handle = 0;
         unsafe {
-            ::check(device.vk().CreateGraphicsPipelines(device.handle(), 0, 1, &create_info,
+            ::check(device.vk().core.vkCreateGraphicsPipelines(device.handle(), 0, 1, &create_info,
                 ptr::null(), &mut handle));
         }
 
@@ -219,7 +223,7 @@ impl GraphicsPipeline {
         })
     }
 
-    pub fn handle(&self) -> vk::Pipeline {
+    pub fn handle(&self) -> vk::VkPipeline {
         self.inner.handle
     }
 
@@ -231,7 +235,7 @@ impl GraphicsPipeline {
 impl Drop for Inner {
     fn drop(&mut self) {
         unsafe {
-            self.device.vk().DestroyPipeline(self.device.handle(), self.handle, ptr::null());
+            self.device.vk().core.vkDestroyPipeline(self.device.handle(), self.handle, ptr::null());
         }
     }
 }

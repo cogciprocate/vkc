@@ -18,10 +18,10 @@ use std::mem;
 use std::ffi::CStr;
 use std::ffi::CString;
 use std::fmt;
-use std::os::raw::c_char;
-use std::os::raw::c_void;
-use std::os::raw::c_ulong;
-use std::os::raw::c_double;
+use libc::c_char;
+use libc::c_void;
+use libc::c_ulong;
+use libc::c_double;
 
 pub type Flags = u32;
 pub type Bool32 = u32;

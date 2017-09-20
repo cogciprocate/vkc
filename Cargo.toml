@@ -13,7 +13,9 @@ exclude = ["target/*", "*.png", "bak/*"]
 # categories = ["asynchronous", "concurrency", "science", "api-bindings"]
 
 [dependencies]
-vk-sys = "*"
 winit = "*"
 libloading = "*"
 smallvec = "*"
+vks = { path = "../vks" }
+libc = "*"
+# nalgebra = "*"

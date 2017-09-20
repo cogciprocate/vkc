@@ -4,11 +4,12 @@
 use std::sync::Arc;
 use std::ptr;
 use vk;
+use vks;
 use ::{util, VkcResult, Device};
 
 #[derive(Debug)]
 struct Inner {
-    handle: vk::Semaphore,
+    handle: vk::VkSemaphore,
     device: Device,
 }
 
@@ -19,15 +20,15 @@ pub struct Semaphore {
 
 impl Semaphore {
     pub fn new(device: Device) -> VkcResult<Semaphore> {
-        let create_info = vk::SemaphoreCreateInfo {
-            sType: vk::STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        let create_info = vk::VkSemaphoreCreateInfo {
+            sType: vk::VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
         };
 
         let mut handle = 0;
         unsafe {
-            ::check(device.vk().CreateSemaphore(device.handle(), &create_info,
+            ::check(device.vk().core.vkCreateSemaphore(device.handle(), &create_info,
                 ptr::null(), &mut handle));
         }
 
@@ -39,7 +40,7 @@ impl Semaphore {
         })
     }
 
-    pub fn handle(&self) -> vk::Semaphore {
+    pub fn handle(&self) -> vk::VkSemaphore {
         self.inner.handle
     }
 
@@ -51,7 +52,7 @@ impl Semaphore {
 impl Drop for Inner {
     fn drop(&mut self) {
         unsafe {
-            self.device.vk().DestroySemaphore(self.device.handle(), self.handle, ptr::null());
+            self.device.vk().core.vkDestroySemaphore(self.device.handle(), self.handle, ptr::null());
         }
     }
 }
