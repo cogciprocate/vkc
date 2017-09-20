@@ -19,12 +19,12 @@ pub struct Buffer {
 }
 
 impl Buffer {
-    pub fn new(device: Device) -> VkcResult<Buffer> {
+    pub fn new(device: Device, size: u64) -> VkcResult<Buffer> {
         let create_info = vk::VkBufferCreateInfo {
             sType: vk::VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
-            size: (mem::size_of::<Vertex>() * ::VERTICES.len()) as u64,
+            size: size,
             usage: vk::VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
             sharingMode: vk::VK_SHARING_MODE_EXCLUSIVE,
             queueFamilyIndexCount: 0,

@@ -16,7 +16,6 @@ static REQUIRED_EXTENSIONS: [&[u8]; 2] = [
     b"VK_KHR_win32_surface",
 ];
 
-
 unsafe extern "system" fn __debug_callback(_flags: vk::VkDebugReportFlagsEXT,
         _obj_type: vk::VkDebugReportObjectTypeEXT, _obj: u64, _location: usize, _code: i32,
         _layer_prefix: *const c_char, msg: *const c_char, _user_data: *mut c_void) -> u32
@@ -24,7 +23,6 @@ unsafe extern "system" fn __debug_callback(_flags: vk::VkDebugReportFlagsEXT,
     println!("{}", CStr::from_ptr(msg).to_str().unwrap());
     vk::VK_FALSE
 }
-
 
 // fn create_debug_report_callback_ext(instance: &Instance,
 //         create_info: &vk::VkDebugReportCallbackCreateInfoEXT, allocator: vk::VkDebugReportCallbackEXT)
@@ -36,10 +34,12 @@ fn check_validation_layer_support(loader: &Loader, print: bool) -> bool {
     let mut layer_count = 0u32;
     let mut available_layers: Vec<vk::VkLayerProperties>;
     unsafe {
-        ::check(loader.core_global().vkEnumerateInstanceLayerProperties(&mut layer_count, ptr::null_mut()));
+        ::check(loader.core_global().vkEnumerateInstanceLayerProperties(&mut layer_count,
+            ptr::null_mut()));
         available_layers = Vec::with_capacity(layer_count as usize);
         available_layers.set_len(layer_count as usize);
-        ::check(loader.core_global().vkEnumerateInstanceLayerProperties(&mut layer_count, available_layers.as_mut_ptr()));
+        ::check(loader.core_global().vkEnumerateInstanceLayerProperties(&mut layer_count,
+            available_layers.as_mut_ptr()));
 
         // Print available layers:
         if print {
@@ -219,7 +219,10 @@ impl Instance {
     }
 
     #[inline]
-    pub fn get_instance_proc_addr(&self, name: *const i8) -> extern "system" fn() -> () {
+    pub fn get_instance_proc_addr(&self, name: *const i8)
+            -> Option<unsafe extern "system" fn(*mut vk::VkInstance_T, *const i8)
+                -> Option<unsafe extern "system" fn()>>
+    {
         self.inner.loader.get_instance_proc_addr(self.inner.handle, name)
     }
 

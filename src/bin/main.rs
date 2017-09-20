@@ -8,7 +8,15 @@ use std::ptr;
 use vkc::winit::{EventsLoop, WindowBuilder, Window, /*ControlFlow,*/ Event, WindowEvent};
 use vkc::{vk, device, VkcResult, Version, Instance, Device, Surface, Swapchain, ImageView,
     PipelineLayout, RenderPass, GraphicsPipeline, Framebuffer, CommandPool, Semaphore,
-    Buffer, DeviceMemory};
+    Buffer, DeviceMemory, Vertex};
+
+
+const VERTICES: [Vertex; 3] =  [
+    Vertex { pos: [0.0f32, -0.5f32], color: [1.0f32, 0.0f32, 0.0f32] },
+    Vertex { pos: [0.5f32, 0.5f32], color: [0.0f32, 1.0f32, 0.0f32] },
+    Vertex { pos: [-0.5f32, 0.5f32], color: [0.0f32, 0.0f32, 1.0f32] },
+];
+
 
 fn main() {
     unsafe {
@@ -43,8 +51,6 @@ fn init_instance() -> VkcResult<Instance> {
     unsafe { Instance::new(&app_info) }
 }
 
-
-
 fn find_memory_type(device: &Device, type_filter: u32, properties: vk::VkMemoryPropertyFlags) -> u32 {
     let mut mem_properties: vk::VkPhysicalDeviceMemoryProperties;
     unsafe {
@@ -63,9 +69,9 @@ fn find_memory_type(device: &Device, type_filter: u32, properties: vk::VkMemoryP
     panic!("Failed to find suitable memory type.");
 }
 
-
 fn create_vertex_buffer(device: &Device) -> VkcResult<(Buffer, DeviceMemory)> {
-    let vertex_buffer = Buffer::new(device.clone())?;
+    let buffer_bytes = (mem::size_of::<Vertex>() * VERTICES.len()) as u64;
+    let vertex_buffer = Buffer::new(device.clone(), buffer_bytes)?;
 
     let mut mem_requirements: vk::VkMemoryRequirements;
     unsafe {
@@ -74,18 +80,23 @@ fn create_vertex_buffer(device: &Device) -> VkcResult<(Buffer, DeviceMemory)> {
             &mut mem_requirements);
     }
 
+    // * Use a memory heap that is host coherent, indicated with
+    //   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT (or)
+    // * Call vkFlushMappedMemoryRanges to after writing to the mapped
+    //   memory, and call vkInvalidateMappedMemoryRanges before reading from
+    //   the mapped memory
+    let memory_type_index = find_memory_type(device, mem_requirements.memoryTypeBits,
+        vk::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
     let alloc_info = vk::VkMemoryAllocateInfo {
         sType: vk::VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         pNext: ptr::null(),
         allocationSize: mem_requirements.size,
-        memoryTypeIndex: find_memory_type(device, mem_requirements.memoryTypeBits,
-            vk::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT),
+        memoryTypeIndex: memory_type_index,
     };
 
-    let mem_type_idx = find_memory_type(device, mem_requirements.memoryTypeBits,
-            vk::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     let vertex_buffer_memory = DeviceMemory::new(device.clone(), mem_requirements.size,
-        mem_type_idx)?;
+        memory_type_index)?;
 
     unsafe {
         vkc::check(device.vk().core.vkBindBufferMemory(device.handle(), vertex_buffer.handle(),
@@ -96,6 +107,15 @@ fn create_vertex_buffer(device: &Device) -> VkcResult<(Buffer, DeviceMemory)> {
     // vkMapMemory(device, vertexBufferMemory, 0, bufferInfo.size, 0, &data);
     //     memcpy(data, vertices.data(), (size_t) bufferInfo.size);
     // vkUnmapMemory(device, vertexBufferMemory);
+
+    let mut data = ptr::null_mut();
+    unsafe {
+        vkc::check(device.vk().core.vkMapMemory(device.handle(), vertex_buffer_memory.handle(),
+            0, buffer_bytes, 0, &mut data));
+        ptr::copy_nonoverlapping(&VERTICES, data as *mut [vkc::Vertex; 3], buffer_bytes as usize);
+
+        device.vk().core.vkUnmapMemory(device.handle(), vertex_buffer_memory.handle());
+    }
 
     Ok((vertex_buffer, vertex_buffer_memory))
 }
@@ -141,11 +161,11 @@ impl App {
         let framebuffers = vkc::create_framebuffers(&device, &render_pass,
             &image_views, swapchain.extent().clone())?;
         let command_pool = CommandPool::new(device.clone(), &surface, queue_family_flags)?;
+        let (vertex_buffer, vertex_buffer_memory) = create_vertex_buffer(&device)?;
         let command_buffers = vkc::create_command_buffers(&device, &command_pool, &render_pass,
-            &graphics_pipeline, &framebuffers, swapchain.extent())?;
+            &graphics_pipeline, &framebuffers, swapchain.extent(), &vertex_buffer)?;
         let image_available_semaphore = Semaphore::new(device.clone())?;
         let render_finished_semaphore = Semaphore::new(device.clone())?;
-        let (vertex_buffer, vertex_buffer_memory) = create_vertex_buffer(&device)?;
 
         Ok(App {
             instance,
@@ -201,7 +221,8 @@ impl App {
             self.swapchain.as_ref().unwrap().extent().clone())?);
         self.command_buffers = Some(vkc::create_command_buffers(&self.device, &self.command_pool,
             self.render_pass.as_ref().unwrap(), self.graphics_pipeline.as_ref().unwrap(),
-            self.framebuffers.as_ref().unwrap(), self.swapchain.as_ref().unwrap().extent())?);
+            self.framebuffers.as_ref().unwrap(), self.swapchain.as_ref().unwrap().extent(),
+            &self.vertex_buffer)?);
         Ok(())
     }
 

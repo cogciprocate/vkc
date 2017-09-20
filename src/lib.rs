@@ -100,8 +100,8 @@ macro_rules! offset_of {
 
 #[repr(C)]
 pub struct Vertex {
-    pos: [f32; 2],
-    color: [f32; 3],
+    pub pos: [f32; 2],
+    pub color: [f32; 3],
 }
 
 impl Vertex {
@@ -134,15 +134,6 @@ impl Vertex {
         ]
     }
 }
-
-pub const VERTICES: [Vertex; 3] =  [
-    Vertex { pos: [0.0f32, -0.5f32], color: [1.0f32, 0.0f32, 0.0f32] },
-    Vertex { pos: [0.5f32, 0.5f32], color: [0.0f32, 1.0f32, 0.0f32] },
-    Vertex { pos: [-0.5f32, 0.5f32], color: [0.0f32, 0.0f32, 1.0f32] },
-];
-
-
-
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
