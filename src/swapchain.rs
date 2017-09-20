@@ -99,7 +99,7 @@ fn choose_swap_extent(capabilities: &vks::khr_surface::VkSurfaceCapabilitiesKHR,
     if capabilities.currentExtent.width != u32::max_value() {
         // return vk::VkExtent2D { width: capabilities.currentExtent.width,
         //     height: capabilities.currentExtent.height };
-        println!("Swap Extent (current): {:?}", &capabilities.currentExtent);
+        // println!("Swap Extent (current): {:?}", &capabilities.currentExtent);
         return capabilities.currentExtent.clone();
     } else {
         let mut actual_extent = window_size
@@ -108,7 +108,7 @@ fn choose_swap_extent(capabilities: &vks::khr_surface::VkSurfaceCapabilitiesKHR,
             cmp::min(capabilities.maxImageExtent.width, actual_extent.width));
         actual_extent.height = cmp::max(capabilities.minImageExtent.height,
             cmp::min(capabilities.maxImageExtent.height, actual_extent.height));
-        println!("Swap Extent (actual): {:?}", &actual_extent);
+        // println!("Swap Extent (actual): {:?}", &actual_extent);
         return actual_extent
     }
 }

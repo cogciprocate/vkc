@@ -12,7 +12,7 @@ use vkc::{vk, device, VkcResult, Version, Instance, Device, Surface, Swapchain, 
 
 
 const VERTICES: [Vertex; 3] =  [
-    Vertex { pos: [0.0f32, -0.5f32], color: [1.0f32, 0.0f32, 0.0f32] },
+    Vertex { pos: [0.0f32, -0.5f32], color: [1.0f32, 1.0f32, 1.0f32] },
     Vertex { pos: [0.5f32, 0.5f32], color: [0.0f32, 1.0f32, 0.0f32] },
     Vertex { pos: [-0.5f32, 0.5f32], color: [0.0f32, 0.0f32, 1.0f32] },
 ];
@@ -51,73 +51,94 @@ fn init_instance() -> VkcResult<Instance> {
     unsafe { Instance::new(&app_info) }
 }
 
-fn find_memory_type(device: &Device, type_filter: u32, properties: vk::VkMemoryPropertyFlags) -> u32 {
-    let mut mem_properties: vk::VkPhysicalDeviceMemoryProperties;
-    unsafe {
-        mem_properties = mem::uninitialized();
-        device.instance().vk().core.vkGetPhysicalDeviceMemoryProperties(device.physical_device(),
-            &mut mem_properties);
-    }
-
-    for i in 0..mem_properties.memoryTypeCount {
-        if (type_filter & (1 << i)) != 0 &&
-            (mem_properties.memoryTypes[i as usize].propertyFlags & properties) == properties
-        {
-            return i;
-        }
-    }
-    panic!("Failed to find suitable memory type.");
-}
-
-fn create_vertex_buffer(device: &Device) -> VkcResult<(Buffer, DeviceMemory)> {
-    let buffer_bytes = (mem::size_of::<Vertex>() * VERTICES.len()) as u64;
-    let vertex_buffer = Buffer::new(device.clone(), buffer_bytes)?;
-
-    let mut mem_requirements: vk::VkMemoryRequirements;
-    unsafe {
-        mem_requirements = mem::uninitialized();
-        device.vk().core.vkGetBufferMemoryRequirements(device.handle(), vertex_buffer.handle(),
-            &mut mem_requirements);
-    }
-
-    // * Use a memory heap that is host coherent, indicated with
-    //   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT (or)
-    // * Call vkFlushMappedMemoryRanges to after writing to the mapped
-    //   memory, and call vkInvalidateMappedMemoryRanges before reading from
-    //   the mapped memory
-    let memory_type_index = find_memory_type(device, mem_requirements.memoryTypeBits,
-        vk::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-    let alloc_info = vk::VkMemoryAllocateInfo {
-        sType: vk::VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+fn copy_buffer(device: &Device, command_pool: &CommandPool, src_buffer: &Buffer,
+        dst_buffer: &Buffer, size: vk::VkDeviceSize)
+{
+    let alloc_info = vk::VkCommandBufferAllocateInfo {
+        sType: vk::VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         pNext: ptr::null(),
-        allocationSize: mem_requirements.size,
-        memoryTypeIndex: memory_type_index,
+        commandPool: command_pool.handle(),
+        level: vk::VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        commandBufferCount: 1,
     };
 
-    let vertex_buffer_memory = DeviceMemory::new(device.clone(), mem_requirements.size,
-        memory_type_index)?;
-
+    let mut command_buffer = ptr::null_mut();
     unsafe {
-        vkc::check(device.vk().core.vkBindBufferMemory(device.handle(), vertex_buffer.handle(),
-            vertex_buffer_memory.handle(), 0));
+        vkc::check(device.vk().core.vkAllocateCommandBuffers(device.handle(), &alloc_info,
+            &mut command_buffer));
     }
 
-    // void* data;
-    // vkMapMemory(device, vertexBufferMemory, 0, bufferInfo.size, 0, &data);
-    //     memcpy(data, vertices.data(), (size_t) bufferInfo.size);
-    // vkUnmapMemory(device, vertexBufferMemory);
+    // TODO: Look into creating a separate command pool with the
+    // `VK_COMMAND_POOL_CREATE_TRANSIENT_BIT` flag for short lived command
+    // buffers like this.
+
+    let begin_info = vk::VkCommandBufferBeginInfo {
+        sType: vk::VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        pNext: ptr::null(),
+        flags: vk::VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+        pInheritanceInfo: ptr::null(),
+    };
+
+    unsafe { device.vk().core.vkBeginCommandBuffer(command_buffer, &begin_info); }
+
+    let copy_region = vk::VkBufferCopy {
+        srcOffset: 0,
+        dstOffset: 0,
+        size: size,
+    };
+
+    unsafe { device.vk().core.vkCmdCopyBuffer(command_buffer, src_buffer.handle(),
+        dst_buffer.handle(), 1, &copy_region); }
+
+    unsafe { vkc::check(device.vk().core.vkEndCommandBuffer(command_buffer)); }
+
+    let submit_info = vk::VkSubmitInfo {
+        sType: vk::VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        pNext: ptr::null(),
+        waitSemaphoreCount: 0,
+        pWaitSemaphores: ptr::null(),
+        pWaitDstStageMask: ptr::null(),
+        commandBufferCount: 1,
+        pCommandBuffers: &command_buffer,
+        signalSemaphoreCount: 0,
+        pSignalSemaphores: ptr::null(),
+    };
+
+    unsafe {
+        vkc::check(device.vk().core.vkQueueSubmit(device.queue(0), 1,
+            &submit_info, 0));
+        vkc::check(device.vk().core.vkQueueWaitIdle(device.queue(0)));
+        device.vk().core.vkFreeCommandBuffers(device.handle(),
+            command_pool.handle(), 1, &command_buffer);
+    }
+}
+
+fn create_vertex_buffer(device: &Device, command_pool: &CommandPool) -> VkcResult<Buffer> {
+    let buffer_bytes = (mem::size_of::<Vertex>() * VERTICES.len()) as u64;
+
+    let staging_buffer = Buffer::new(device.clone(), buffer_bytes,
+        vk::VK_BUFFER_USAGE_TRANSFER_SRC_BIT, vk::VK_SHARING_MODE_EXCLUSIVE,
+        vk::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)?;
 
     let mut data = ptr::null_mut();
     unsafe {
-        vkc::check(device.vk().core.vkMapMemory(device.handle(), vertex_buffer_memory.handle(),
-            0, buffer_bytes, 0, &mut data));
+        vkc::check(device.vk().core.vkMapMemory(device.handle(),
+            staging_buffer.device_memory().handle(), 0, buffer_bytes, 0, &mut data));
         ptr::copy_nonoverlapping(&VERTICES, data as *mut [vkc::Vertex; 3], buffer_bytes as usize);
-
-        device.vk().core.vkUnmapMemory(device.handle(), vertex_buffer_memory.handle());
+        device.vk().core.vkUnmapMemory(device.handle(), staging_buffer.device_memory().handle());
     }
 
-    Ok((vertex_buffer, vertex_buffer_memory))
+    // HOST-RW:
+    // let vertex_buffer = Buffer::new(device.clone(), buffer_bytes,
+    //     vk::VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, vk::VK_SHARING_MODE_EXCLUSIVE,
+    //     vk::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)?;
+    let vertex_buffer = Buffer::new(device.clone(), buffer_bytes,
+        vk::VK_BUFFER_USAGE_TRANSFER_DST_BIT | vk::VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        vk::VK_SHARING_MODE_EXCLUSIVE, vk::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)?;
+
+    copy_buffer(device, command_pool, &staging_buffer, &vertex_buffer, buffer_bytes);
+
+    Ok(vertex_buffer)
 }
 
 struct App {
@@ -138,7 +159,7 @@ struct App {
     image_available_semaphore: Semaphore,
     render_finished_semaphore: Semaphore,
     vertex_buffer: Buffer,
-    vertex_buffer_memory: DeviceMemory,
+    // vertex_buffer_memory: DeviceMemory,
 }
 
 impl App {
@@ -161,9 +182,10 @@ impl App {
         let framebuffers = vkc::create_framebuffers(&device, &render_pass,
             &image_views, swapchain.extent().clone())?;
         let command_pool = CommandPool::new(device.clone(), &surface, queue_family_flags)?;
-        let (vertex_buffer, vertex_buffer_memory) = create_vertex_buffer(&device)?;
+        let vertex_buffer = create_vertex_buffer(&device, &command_pool)?;
         let command_buffers = vkc::create_command_buffers(&device, &command_pool, &render_pass,
-            &graphics_pipeline, &framebuffers, swapchain.extent(), &vertex_buffer)?;
+            &graphics_pipeline, &framebuffers, swapchain.extent(), &vertex_buffer,
+            VERTICES.len() as u32)?;
         let image_available_semaphore = Semaphore::new(device.clone())?;
         let render_finished_semaphore = Semaphore::new(device.clone())?;
 
@@ -185,7 +207,7 @@ impl App {
             image_available_semaphore,
             render_finished_semaphore,
             vertex_buffer,
-            vertex_buffer_memory,
+            // vertex_buffer_memory,
         })
     }
 
@@ -222,14 +244,15 @@ impl App {
         self.command_buffers = Some(vkc::create_command_buffers(&self.device, &self.command_pool,
             self.render_pass.as_ref().unwrap(), self.graphics_pipeline.as_ref().unwrap(),
             self.framebuffers.as_ref().unwrap(), self.swapchain.as_ref().unwrap().extent(),
-            &self.vertex_buffer)?);
+            &self.vertex_buffer, VERTICES.len() as u32)?);
         Ok(())
     }
 
-    pub fn draw_frame(&mut self) -> VkcResult<()> {
+    fn draw_frame(&mut self) -> VkcResult<()> {
         let mut image_index = 0u32;
         let acq_res = unsafe {
-            self.device.vk().khr_swapchain.vkAcquireNextImageKHR(self.device.handle(), self.swapchain.as_ref().unwrap().handle(),
+            self.device.vk().khr_swapchain.vkAcquireNextImageKHR(self.device.handle(),
+                self.swapchain.as_ref().unwrap().handle(),
                 u64::max_value(), self.image_available_semaphore.handle(), 0, &mut image_index)
         };
 

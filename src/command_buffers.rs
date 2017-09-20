@@ -40,7 +40,7 @@ use ::{util, VkcResult, Device, Framebuffer, CommandPool, RenderPass, GraphicsPi
 pub fn create_command_buffers(device: &Device, command_pool: &CommandPool,
         render_pass: &RenderPass, graphics_pipeline: &GraphicsPipeline,
         swapchain_framebuffers: &[Framebuffer], swapchain_extent: &vk::VkExtent2D,
-        vertex_buffer: &Buffer)
+        vertex_buffer: &Buffer, vertex_count: u32)
         -> VkcResult<Vec<vk::VkCommandBuffer>>
 {
     let mut command_buffers = Vec::with_capacity(swapchain_framebuffers.len());
@@ -129,7 +129,7 @@ pub fn create_command_buffers(device: &Device, command_pool: &CommandPool,
             //   defines the lowest value of gl_VertexIndex.
             // * firstInstance: Used as an offset for instanced rendering,
             //   defines the lowest value of gl_InstanceIndex.
-            device.vk().core.vkCmdDraw(command_buffer, 3, 1, 0, 0);
+            device.vk().core.vkCmdDraw(command_buffer, vertex_count, 1, 0, 0);
             device.vk().core.vkCmdEndRenderPass(command_buffer);
             device.vk().core.vkEndCommandBuffer(command_buffer);
         }

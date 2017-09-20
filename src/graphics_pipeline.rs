@@ -146,7 +146,8 @@ impl GraphicsPipeline {
             srcAlphaBlendFactor: vk::VK_BLEND_FACTOR_ONE,
             dstAlphaBlendFactor: vk::VK_BLEND_FACTOR_ZERO,
             alphaBlendOp: vk::VK_BLEND_OP_ADD,
-            colorWriteMask: vk::VK_COLOR_COMPONENT_R_BIT | vk::VK_COLOR_COMPONENT_G_BIT | vk::VK_COLOR_COMPONENT_B_BIT | vk::VK_COLOR_COMPONENT_A_BIT,
+            colorWriteMask: vk::VK_COLOR_COMPONENT_R_BIT | vk::VK_COLOR_COMPONENT_G_BIT |
+                vk::VK_COLOR_COMPONENT_B_BIT | vk::VK_COLOR_COMPONENT_A_BIT,
         };
 
         // ///////////////////////////////////////////////
