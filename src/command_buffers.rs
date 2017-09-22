@@ -2,7 +2,8 @@ use std::sync::Arc;
 use std::ptr;
 use vk;
 use vks;
-use ::{util, VkcResult, Device, Framebuffer, CommandPool, RenderPass, GraphicsPipeline, Buffer};
+use ::{util, VkcResult, Device, Framebuffer, CommandPool, RenderPass, GraphicsPipeline, Buffer,
+    PipelineLayout};
 
 
 
@@ -40,7 +41,9 @@ use ::{util, VkcResult, Device, Framebuffer, CommandPool, RenderPass, GraphicsPi
 pub fn create_command_buffers(device: &Device, command_pool: &CommandPool,
         render_pass: &RenderPass, graphics_pipeline: &GraphicsPipeline,
         swapchain_framebuffers: &[Framebuffer], swapchain_extent: &vk::VkExtent2D,
-        vertex_buffer: &Buffer, vertex_count: u32)
+        vertex_buffer: &Buffer, index_buffer: &Buffer, vertex_count: u32,
+        index_count: u32, pipeline_layout: &PipelineLayout,
+        descriptor_set: vk::VkDescriptorSet)
         -> VkcResult<Vec<vk::VkCommandBuffer>>
 {
     let mut command_buffers = Vec::with_capacity(swapchain_framebuffers.len());
@@ -59,7 +62,7 @@ pub fn create_command_buffers(device: &Device, command_pool: &CommandPool,
     };
 
     unsafe {
-        ::check(device.vk().core.vkAllocateCommandBuffers(device.handle(), &alloc_info,
+        ::check(device.vk().vkAllocateCommandBuffers(device.handle(), &alloc_info,
             command_buffers.as_mut_ptr()));
     }
 
@@ -108,28 +111,28 @@ pub fn create_command_buffers(device: &Device, command_pool: &CommandPool,
             device.vk().core.vkCmdBindPipeline(command_buffer, vk::VK_PIPELINE_BIND_POINT_GRAPHICS,
                 graphics_pipeline.handle());
 
-
-
-            // VkBuffer vertexBuffers[] = {vertexBuffer};
-            // VkDeviceSize offsets[] = {0};
-            // vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);
-
             let vertex_buffers = [vertex_buffer.handle()];
             let offsets = [0];
             device.vk().core.vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers.as_ptr(),
                 offsets.as_ptr());
+            device.vk().core.vkCmdBindIndexBuffer(command_buffer, index_buffer.handle(), 0,
+                vk::VK_INDEX_TYPE_UINT16);
 
+            device.vk().core.vkCmdBindDescriptorSets(command_buffer,
+                vk::VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout.handle(), 0, 1,
+                &descriptor_set, 0, ptr::null());
 
+            // // * vertexCount: Even though we don't have a vertex buffer, we
+            // //   technically still have 3 vertices to draw.
+            // // * instanceCount: Used for instanced rendering, use 1 if you're
+            // //   not doing that.
+            // // * firstVertex: Used as an offset into the vertex buffer,
+            // //   defines the lowest value of gl_VertexIndex.
+            // // * firstInstance: Used as an offset for instanced rendering,
+            // //   defines the lowest value of gl_InstanceIndex.
+            // device.vk().core.vkCmdDraw(command_buffer, vertex_count, 1, 0, 0);
+            device.vk().core.vkCmdDrawIndexed(command_buffer, index_count, 1, 0, 0, 0);
 
-            // * vertexCount: Even though we don't have a vertex buffer, we
-            //   technically still have 3 vertices to draw.
-            // * instanceCount: Used for instanced rendering, use 1 if you're
-            //   not doing that.
-            // * firstVertex: Used as an offset into the vertex buffer,
-            //   defines the lowest value of gl_VertexIndex.
-            // * firstInstance: Used as an offset for instanced rendering,
-            //   defines the lowest value of gl_InstanceIndex.
-            device.vk().core.vkCmdDraw(command_buffer, vertex_count, 1, 0, 0);
             device.vk().core.vkCmdEndRenderPass(command_buffer);
             device.vk().core.vkEndCommandBuffer(command_buffer);
         }

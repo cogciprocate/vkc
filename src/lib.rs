@@ -4,7 +4,8 @@
 
 extern crate libloading as lib;
 extern crate smallvec;
-// extern crate nalgebra;
+extern crate nalgebra;
+// extern crate cgmath;
 extern crate vks;
 extern crate libc;
 pub extern crate winit;
@@ -26,6 +27,8 @@ mod command_buffers;
 mod semaphore;
 mod buffer;
 mod device_memory;
+mod descriptor_set_layout;
+mod descriptor_pool;
 
 pub mod vk {
     pub use vks::*;
@@ -62,6 +65,7 @@ use std::mem;
 use std::ptr;
 use winit::{EventsLoop, WindowBuilder, Window, CreationError, ControlFlow, Event, WindowEvent};
 use loader::Loader;
+use nalgebra::Matrix4;
 // pub use vulkan_h as vk;
 // pub use vks::core as vkscore;
 // use vk::*;
@@ -82,6 +86,8 @@ pub use command_buffers::create_command_buffers;
 pub use semaphore::Semaphore;
 pub use buffer::Buffer;
 pub use device_memory::DeviceMemory;
+pub use descriptor_set_layout::DescriptorSetLayout;
+pub use descriptor_pool::DescriptorPool;
 
 pub type VkcResult<T> = Result<T, ()>;
 
@@ -135,6 +141,22 @@ impl Vertex {
     }
 }
 
+// #[derive(Debug)]
+// pub struct UniformBufferObject {
+//     pub model: Matrix4<f32>,
+//     pub view: Matrix4<f32>,
+//     pub proj: Matrix4<f32>,
+// }
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct UniformBufferObject {
+    pub model: [[f32; 4]; 4],
+    pub view: [[f32; 4]; 4],
+    pub proj: [[f32; 4]; 4],
+}
+
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////// TEMPLATE /////////////////////////////////////////////
@@ -146,7 +168,7 @@ impl Vertex {
 
 // #[derive(Debug)]
 // struct Inner {
-//     handle: vks::core::VkAbstractTemplate,
+//     handle: vk::VkAbstractTemplate,
 //     device: Device,
 // }
 
@@ -160,7 +182,7 @@ impl Vertex {
 
 //         let mut handle = 0;
 //         unsafe {
-//             ::check(device.vk().CreateAbstractTemplate(device.handle(), &create_info,
+//             ::check(device.vk().vkCreateAbstractTemplate(device.handle(), &create_info,
 //                 ptr::null(), &mut handle));
 //         }
 
@@ -172,7 +194,7 @@ impl Vertex {
 //         })
 //     }
 
-//     pub fn handle(&self) -> vks::core::VkAbstractTemplate {
+//     pub fn handle(&self) -> vk::VkAbstractTemplate {
 //         self.inner.handle
 //     }
 
@@ -184,7 +206,7 @@ impl Vertex {
 // impl Drop for Inner {
 //     fn drop(&mut self) {
 //         unsafe {
-//             self.device.vk().DestroyAbstractTemplate(self.device.handle(), self.handle, ptr::null());
+//             self.device.vk().vkDestroyAbstractTemplate(self.device.handle(), self.handle, ptr::null());
 //         }
 //     }
 // }
@@ -195,7 +217,7 @@ impl Vertex {
 
 
 pub fn check(code: i32) {
-    if code != vks::core::VK_SUCCESS { panic!("Error code: {}", code); }
+    if code != vk::VK_SUCCESS { panic!("Error code: {}", code); }
 }
 
 

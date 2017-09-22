@@ -184,7 +184,7 @@ impl Swapchain {
         };
 
         let mut handle = 0;
-        let res = unsafe { device.vk().khr_swapchain.vkCreateSwapchainKHR(device.handle(), &create_info, ptr::null(), &mut handle) };
+        let res = unsafe { device.vk().vkCreateSwapchainKHR(device.handle(), &create_info, ptr::null(), &mut handle) };
         if res != vk::VK_SUCCESS {
             panic!("failed to create swap chain!");
         }
@@ -192,9 +192,9 @@ impl Swapchain {
         let mut image_count = 0;
         let mut images = SmallVec::new();
         unsafe {
-            ::check(device.vk().khr_swapchain.vkGetSwapchainImagesKHR(device.handle(), handle, &mut image_count, ptr::null_mut()));
+            ::check(device.vk().vkGetSwapchainImagesKHR(device.handle(), handle, &mut image_count, ptr::null_mut()));
             images.set_len(image_count as usize);
-            ::check(device.vk().khr_swapchain.vkGetSwapchainImagesKHR(device.handle(), handle, &mut image_count, images.as_mut_ptr()));
+            ::check(device.vk().vkGetSwapchainImagesKHR(device.handle(), handle, &mut image_count, images.as_mut_ptr()));
         }
 
         Ok(Swapchain {
@@ -234,7 +234,7 @@ impl Swapchain {
 impl Drop for Inner {
     fn drop(&mut self) {
         unsafe {
-            self.device.vk().khr_swapchain.vkDestroySwapchainKHR(self.device.handle(), self.handle, ptr::null());
+            self.device.vk().vkDestroySwapchainKHR(self.device.handle(), self.handle, ptr::null());
         }
     }
 }

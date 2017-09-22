@@ -3,7 +3,8 @@ use std::ffi::CStr;
 use std::ptr;
 use vk;
 use vks;
-use ::{util, VkcResult, Device, ShaderModule};
+use smallvec::SmallVec;
+use ::{util, VkcResult, Device, ShaderModule, DescriptorSetLayout};
 
 
 #[derive(Debug)]
@@ -18,13 +19,20 @@ pub struct PipelineLayout {
 }
 
 impl PipelineLayout {
-    pub fn new(device: Device) -> VkcResult<PipelineLayout> {
+    pub fn new(device: Device, descriptor_set_layout: Option<&DescriptorSetLayout>)
+            -> VkcResult<PipelineLayout>
+    {
+        let mut layouts = SmallVec::<[_; 16]>::new();
+        if let Some(dsl) = descriptor_set_layout {
+            layouts.push(dsl.handle());
+        }
+
         let pipeline_layout_info = vk::VkPipelineLayoutCreateInfo {
             sType: vk::VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
-            setLayoutCount: 0,
-            pSetLayouts: ptr::null(),
+            setLayoutCount: layouts.len() as u32,
+            pSetLayouts: layouts.as_ptr(),
             pushConstantRangeCount: 0,
             pPushConstantRanges: ptr::null(),
         };
