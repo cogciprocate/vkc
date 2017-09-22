@@ -7,25 +7,6 @@ use vks;
 use ::{util, VkcResult, Device, DeviceMemory};
 
 
-fn find_memory_type(device: &Device, type_filter: u32, properties: vk::VkMemoryPropertyFlags) -> u32 {
-    let mut mem_properties: vk::VkPhysicalDeviceMemoryProperties;
-    unsafe {
-        mem_properties = mem::uninitialized();
-        device.instance().vk().core.vkGetPhysicalDeviceMemoryProperties(device.physical_device(),
-            &mut mem_properties);
-    }
-
-    for i in 0..mem_properties.memoryTypeCount {
-        if (type_filter & (1 << i)) != 0 &&
-            (mem_properties.memoryTypes[i as usize].propertyFlags & properties) == properties
-        {
-            return i;
-        }
-    }
-    panic!("Failed to find suitable memory type.");
-}
-
-
 
 #[derive(Debug)]
 struct Inner {
@@ -41,7 +22,7 @@ pub struct Buffer {
 
 impl Buffer {
     pub fn new(device: Device, bytes: u64, usage: vk::VkBufferUsageFlags,
-            sharing_mode: vk::VkSharingMode, properties: vk::VkMemoryPropertyFlags)
+            sharing_mode: vk::VkSharingMode, memory_properties: vk::VkMemoryPropertyFlags)
             -> VkcResult<Buffer>
     {
         let create_info = vk::VkBufferCreateInfo {
@@ -61,6 +42,7 @@ impl Buffer {
                 ptr::null(), &mut handle));
         }
 
+        // Memory Requirements:
         let mut mem_requirements: vk::VkMemoryRequirements;
         unsafe {
             mem_requirements = mem::uninitialized();
@@ -102,8 +84,8 @@ impl Buffer {
         // * Call vkFlushMappedMemoryRanges to after writing to the mapped
         //   memory, and call vkInvalidateMappedMemoryRanges before reading from
         //   the mapped memory
-        let memory_type_index = find_memory_type(&device, mem_requirements.memoryTypeBits,
-            properties);
+        let memory_type_index = ::find_memory_type(&device, mem_requirements.memoryTypeBits,
+            memory_properties);
 
         let alloc_info = vk::VkMemoryAllocateInfo {
             sType: vk::VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -112,7 +94,7 @@ impl Buffer {
             memoryTypeIndex: memory_type_index,
         };
 
-        println!("######## Buffer mem_requirements: {:?}", mem_requirements);
+        println!("Buffer: {:?}", mem_requirements);
 
         let device_memory = DeviceMemory::new(device.clone(), mem_requirements.size,
             memory_type_index)?;

@@ -2,22 +2,25 @@
 
 extern crate vkc;
 extern crate cgmath;
+extern crate image;
 
 use std::mem;
 use std::ptr;
 use std::time;
+use image::{ImageFormat, DynamicImage};
 use cgmath::{SquareMatrix, One, Rotation, Rotation3, Basis3, Matrix3, Matrix4, Vector3};
 use vkc::winit::{EventsLoop, WindowBuilder, Window, Event, WindowEvent};
-use vkc::{vk, device, VkcResult, Version, Instance, Device, Surface, Swapchain, ImageView,
+use vkc::{vk, util, device, VkcResult, Version, Instance, Device, Surface, Swapchain, ImageView,
     PipelineLayout, RenderPass, GraphicsPipeline, Framebuffer, CommandPool, Semaphore,
-    Buffer, DeviceMemory, Vertex, DescriptorSetLayout, UniformBufferObject, DescriptorPool};
+    Buffer, DeviceMemory, Vertex, DescriptorSetLayout, UniformBufferObject, DescriptorPool,
+    Image, Sampler};
 
 
 const VERTICES: [Vertex; 4] =  [
-    Vertex { pos: [-0.5f32, -0.5f32], color: [1.0f32, 0.0f32, 0.0f32] },
-    Vertex { pos: [0.5f32, -0.5f32], color: [0.0f32, 1.0f32, 0.0f32] },
-    Vertex { pos: [0.5f32, 0.5f32], color: [0.0f32, 0.0f32, 1.0f32] },
-    Vertex { pos: [-0.5f32, 0.5f32], color: [1.0f32, 1.0f32, 1.0f32] },
+    Vertex { pos: [-0.5, -0.5], color: [1.0, 0.0, 0.0], tex_coord: [1.0, 0.0]},
+    Vertex { pos: [0.5, -0.5], color: [0.0, 1.0, 0.0], tex_coord: [0.0, 0.0] },
+    Vertex { pos: [0.5, 0.5], color: [0.0, 0.0, 1.0], tex_coord: [0.0, 1.0] },
+    Vertex { pos: [-0.5, 0.5], color: [1.0, 1.0, 1.0], tex_coord: [1.0, 1.0] },
 ];
 
 const INDICES: [u16; 6] = [0, 1, 2, 2, 3, 0];
@@ -56,8 +59,8 @@ fn init_instance() -> VkcResult<Instance> {
     unsafe { Instance::new(&app_info) }
 }
 
-fn copy_buffer(device: &Device, command_pool: &CommandPool, src_buffer: &Buffer,
-        dst_buffer: &Buffer, size: vk::VkDeviceSize)
+fn begin_single_time_commands(device: &Device, command_pool: &CommandPool)
+        -> VkcResult<vk::VkCommandBuffer>
 {
     let alloc_info = vk::VkCommandBufferAllocateInfo {
         sType: vk::VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -73,10 +76,6 @@ fn copy_buffer(device: &Device, command_pool: &CommandPool, src_buffer: &Buffer,
             &mut command_buffer));
     }
 
-    // TODO: Look into creating a separate command pool with the
-    // `VK_COMMAND_POOL_CREATE_TRANSIENT_BIT` flag for short lived command
-    // buffers like this.
-
     let begin_info = vk::VkCommandBufferBeginInfo {
         sType: vk::VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         pNext: ptr::null(),
@@ -85,16 +84,12 @@ fn copy_buffer(device: &Device, command_pool: &CommandPool, src_buffer: &Buffer,
     };
 
     unsafe { device.vk().core.vkBeginCommandBuffer(command_buffer, &begin_info); }
+    Ok(command_buffer)
+}
 
-    let copy_region = vk::VkBufferCopy {
-        srcOffset: 0,
-        dstOffset: 0,
-        size: size,
-    };
-
-    unsafe { device.vk().core.vkCmdCopyBuffer(command_buffer, src_buffer.handle(),
-        dst_buffer.handle(), 1, &copy_region); }
-
+fn end_single_time_commands(device: &Device, command_pool: &CommandPool,
+        command_buffer: vk::VkCommandBuffer) -> VkcResult<()>
+{
     unsafe { vkc::check(device.vk().core.vkEndCommandBuffer(command_buffer)); }
 
     let submit_info = vk::VkSubmitInfo {
@@ -116,6 +111,129 @@ fn copy_buffer(device: &Device, command_pool: &CommandPool, src_buffer: &Buffer,
         device.vk().core.vkFreeCommandBuffers(device.handle(),
             command_pool.handle(), 1, &command_buffer);
     }
+
+    Ok(())
+}
+
+fn transition_image_layout(device: &Device, command_pool: &CommandPool, image: &Image,
+        format: vk::VkFormat, old_layout: vk::VkImageLayout, new_layout: vk::VkImageLayout)
+         -> VkcResult<()>
+{
+    let command_buffer = begin_single_time_commands(device, command_pool)?;
+
+    let subresource_range = vk::VkImageSubresourceRange {
+        aspectMask: vk::VK_IMAGE_ASPECT_COLOR_BIT,
+        baseMipLevel: 0,
+        levelCount: 1,
+        baseArrayLayer: 0,
+        layerCount: 1,
+    };
+
+    let mut barrier = vk::VkImageMemoryBarrier {
+        sType: vk::VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        pNext: ptr::null(),
+        srcAccessMask: 0,
+        dstAccessMask: 0,
+        oldLayout: old_layout,
+        newLayout: new_layout,
+        srcQueueFamilyIndex: vk::VK_QUEUE_FAMILY_IGNORED,
+        dstQueueFamilyIndex: vk::VK_QUEUE_FAMILY_IGNORED,
+        image: image.handle(),
+        subresourceRange: subresource_range,
+    };
+
+    let source_stage: vk::VkPipelineStageFlags;
+    let destination_stage: vk::VkPipelineStageFlags;
+
+    if old_layout == vk::VK_IMAGE_LAYOUT_UNDEFINED &&
+            new_layout == vk::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+    {
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = vk::VK_ACCESS_TRANSFER_WRITE_BIT;
+
+        source_stage = vk::VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        destination_stage = vk::VK_PIPELINE_STAGE_TRANSFER_BIT;
+    } else if old_layout == vk::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+            new_layout == vk::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    {
+        barrier.srcAccessMask = vk::VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = vk::VK_ACCESS_SHADER_READ_BIT;
+
+        source_stage = vk::VK_PIPELINE_STAGE_TRANSFER_BIT;
+        destination_stage = vk::VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    } else {
+        panic!("unsupported layout transition");
+    }
+
+    unsafe {
+        device.vk().vkCmdPipelineBarrier(
+            command_buffer,
+            source_stage, destination_stage,
+            0,
+            0, ptr::null(),
+            0, ptr::null(),
+            1, &barrier
+        );
+    }
+
+    end_single_time_commands(device, command_pool, command_buffer)
+}
+
+fn copy_buffer_to_image(device: &Device, command_pool: &CommandPool, buffer: &Buffer,
+        image: &Image, width: u32, height: u32)  -> VkcResult<()>
+{
+    let command_buffer = begin_single_time_commands(device, command_pool)?;
+
+    let image_subresource_layers = vk::VkImageSubresourceLayers {
+        aspectMask: vk::VK_IMAGE_ASPECT_COLOR_BIT,
+        mipLevel: 0,
+        baseArrayLayer: 0,
+        layerCount: 1,
+    };
+
+    let region = vk::VkBufferImageCopy {
+        bufferOffset: 0,
+        bufferRowLength: 0,
+        bufferImageHeight: 0,
+        imageSubresource: image_subresource_layers,
+        imageOffset: vk::VkOffset3D { x: 0, y: 0, z: 0 },
+        imageExtent: vk::VkExtent3D { width, height, depth: 1 },
+    };
+
+    unsafe {
+        device.vk().vkCmdCopyBufferToImage(
+            command_buffer,
+            buffer.handle(),
+            image.handle(),
+            vk::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1,
+            &region
+        );
+    }
+
+    end_single_time_commands(device, command_pool, command_buffer)
+}
+
+fn copy_buffer(device: &Device, command_pool: &CommandPool, src_buffer: &Buffer,
+        dst_buffer: &Buffer, size: vk::VkDeviceSize)  -> VkcResult<()>
+{
+    // unsafe { device.vk().core.vkBeginCommandBuffer(command_buffer, &begin_info); }
+
+    // TODO: Look into creating a separate command pool with the
+    // `VK_COMMAND_POOL_CREATE_TRANSIENT_BIT` flag for short lived command
+    // buffers like this.
+    let command_buffer = begin_single_time_commands(device, command_pool)?;
+
+    let copy_region = vk::VkBufferCopy {
+        srcOffset: 0,
+        dstOffset: 0,
+        size: size,
+    };
+
+    unsafe { device.vk().core.vkCmdCopyBuffer(command_buffer, src_buffer.handle(),
+        dst_buffer.handle(), 1, &copy_region); }
+
+    end_single_time_commands(device, command_pool, command_buffer)
 }
 
 fn create_vertex_buffer(device: &Device, command_pool: &CommandPool) -> VkcResult<Buffer> {
@@ -143,7 +261,7 @@ fn create_vertex_buffer(device: &Device, command_pool: &CommandPool) -> VkcResul
         vk::VK_BUFFER_USAGE_TRANSFER_DST_BIT | vk::VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         vk::VK_SHARING_MODE_EXCLUSIVE, vk::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)?;
 
-    copy_buffer(device, command_pool, &staging_buffer, &vertex_buffer, buffer_bytes);
+    copy_buffer(device, command_pool, &staging_buffer, &vertex_buffer, buffer_bytes)?;
 
     Ok(vertex_buffer)
 }
@@ -155,11 +273,10 @@ fn create_index_buffer(device: &Device, command_pool: &CommandPool) -> VkcResult
         vk::VK_BUFFER_USAGE_TRANSFER_SRC_BIT, vk::VK_SHARING_MODE_EXCLUSIVE,
         vk::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)?;
 
-    let mut data = ptr::null_mut();
     unsafe {
+        let mut data = ptr::null_mut();
         vkc::check(device.vk().core.vkMapMemory(device.handle(),
             staging_buffer.device_memory().handle(), 0, buffer_bytes, 0, &mut data));
-        // println!("##### IBO data (ptr): {:?}", data);
         ptr::copy_nonoverlapping(&INDICES, data as *mut _, buffer_bytes as usize);
         device.vk().core.vkUnmapMemory(device.handle(), staging_buffer.device_memory().handle());
     }
@@ -168,7 +285,7 @@ fn create_index_buffer(device: &Device, command_pool: &CommandPool) -> VkcResult
         vk::VK_BUFFER_USAGE_TRANSFER_DST_BIT | vk::VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
         vk::VK_SHARING_MODE_EXCLUSIVE, vk::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)?;
 
-    copy_buffer(device, command_pool, &staging_buffer, &index_buffer, buffer_bytes);
+    copy_buffer(device, command_pool, &staging_buffer, &index_buffer, buffer_bytes)?;
 
     Ok(index_buffer)
 }
@@ -185,7 +302,49 @@ fn create_uniform_buffer(device: &Device, command_pool: &CommandPool, _extent: v
     Ok(uniform_buffer)
 }
 
-fn create_descriptor_pool(device: Device) -> VkcResult<DescriptorPool>{
+fn create_texture_image(device: &Device, command_pool: &CommandPool) -> VkcResult<Image> {
+    let pixels = image::open("/src/vkc/textures/texture.jpg").unwrap().to_rgba();
+    let (tex_width, tex_height) = pixels.dimensions();
+    let image_bytes = (tex_width * tex_height * 4) as u64;
+
+    let staging_buffer = Buffer::new(device.clone(), image_bytes,
+        vk::VK_BUFFER_USAGE_TRANSFER_SRC_BIT, vk::VK_SHARING_MODE_EXCLUSIVE,
+        vk::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)?;
+
+    unsafe {
+        let mut data = ptr::null_mut();
+        vkc::check(device.vk().vkMapMemory(device.handle(),
+            staging_buffer.device_memory().handle(), 0, image_bytes, 0, &mut data));
+        ptr::copy_nonoverlapping(pixels.as_ptr(), data as *mut _, pixels.len());
+        device.vk().vkUnmapMemory(device.handle(), staging_buffer.device_memory().handle());
+    }
+
+    let extent = vk::VkExtent3D { width: tex_width, height: tex_height, depth: 1 };
+    let texture_image = Image::new(device.clone(), extent, vk::VK_FORMAT_R8G8B8A8_UNORM,
+        vk::VK_IMAGE_TILING_OPTIMAL, vk::VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+        vk::VK_IMAGE_USAGE_SAMPLED_BIT, vk::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)?;
+
+    transition_image_layout(device, command_pool, &texture_image, vk::VK_FORMAT_R8G8B8A8_UNORM,
+        vk::VK_IMAGE_LAYOUT_UNDEFINED, vk::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)?;
+
+    copy_buffer_to_image(device, command_pool, &staging_buffer, &texture_image,
+        extent.width, extent.height)?;
+
+    transition_image_layout(device, command_pool, &texture_image, vk::VK_FORMAT_R8G8B8A8_UNORM,
+        vk::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, vk::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)?;
+
+    Ok(texture_image)
+}
+
+fn create_texture_image_view(device: Device, image: &Image) -> VkcResult<ImageView> {
+    ImageView::new(device, None, image.handle(), vk::VK_FORMAT_R8G8B8A8_UNORM)
+}
+
+fn create_texture_sampler(device: Device) -> VkcResult<Sampler> {
+    Sampler::new(device)
+}
+
+fn create_descriptor_pool(device: Device) -> VkcResult<DescriptorPool> {
     DescriptorPool::new(device)
 }
 
@@ -194,7 +353,8 @@ fn create_descriptor_set_layout(device: Device) -> VkcResult<DescriptorSetLayout
 }
 
 fn create_descriptor_set(device: &Device, layout: &DescriptorSetLayout,
-        pool: &DescriptorPool, uniform_buffer: &Buffer) -> VkcResult<vk::VkDescriptorSet>
+        pool: &DescriptorPool, uniform_buffer: &Buffer, texture_image_view: &ImageView,
+        texture_sampler: &Sampler) -> VkcResult<vk::VkDescriptorSet>
 {
     let layouts = [layout.handle()];
 
@@ -218,21 +378,42 @@ fn create_descriptor_set(device: &Device, layout: &DescriptorSetLayout,
         range: mem::size_of::<UniformBufferObject>() as u64,
     };
 
-    let descriptor_write = vk::VkWriteDescriptorSet {
-        sType: vk::VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        pNext: ptr::null(),
-        dstSet: descriptor_set,
-        dstBinding: 0,
-        dstArrayElement: 0,
-        descriptorCount: 1,
-        descriptorType: vk::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        pImageInfo: ptr::null(),
-        pBufferInfo: &buffer_info,
-        pTexelBufferView: ptr::null(),
+    let image_info = vk::VkDescriptorImageInfo {
+        sampler: texture_sampler.handle(),
+        imageView: texture_image_view.handle(),
+        imageLayout: vk::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     };
 
+    let descriptor_writes = [
+        vk::VkWriteDescriptorSet {
+            sType: vk::VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            pNext: ptr::null(),
+            dstSet: descriptor_set,
+            dstBinding: 0,
+            dstArrayElement: 0,
+            descriptorCount: 1,
+            descriptorType: vk::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            pImageInfo: ptr::null(),
+            pBufferInfo: &buffer_info,
+            pTexelBufferView: ptr::null(),
+        },
+        vk::VkWriteDescriptorSet {
+            sType: vk::VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            pNext: ptr::null(),
+            dstSet: descriptor_set,
+            dstBinding: 1,
+            dstArrayElement: 0,
+            descriptorCount: 1,
+            descriptorType: vk::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            pImageInfo: &image_info,
+            pBufferInfo: ptr::null(),
+            pTexelBufferView: ptr::null(),
+        },
+    ];
+
     unsafe {
-        device.vk().vkUpdateDescriptorSets(device.handle(), 1, &descriptor_write, 0, ptr::null());
+        device.vk().vkUpdateDescriptorSets(device.handle(), descriptor_writes.len() as u32,
+            descriptor_writes.as_ptr(), 0, ptr::null());
     }
 
     Ok(descriptor_set)
@@ -253,14 +434,17 @@ struct App {
     graphics_pipeline: Option<GraphicsPipeline>,
     framebuffers: Option<Vec<Framebuffer>>,
     command_pool: CommandPool,
-    command_buffers: Option<Vec<vk::VkCommandBuffer>>,
-    image_available_semaphore: Semaphore,
-    render_finished_semaphore: Semaphore,
+    texture_image: Image,
+    texture_image_view: ImageView,
+    texture_sampler: Sampler,
     vertex_buffer: Buffer,
     index_buffer: Buffer,
     uniform_buffer: Buffer,
     descriptor_pool: DescriptorPool,
     descriptor_set: vk::VkDescriptorSet,
+    command_buffers: Option<Vec<vk::VkCommandBuffer>>,
+    image_available_semaphore: Semaphore,
+    render_finished_semaphore: Semaphore,
     start_time: time::Instant,
     // vertex_buffer_memory: DeviceMemory,
 }
@@ -286,13 +470,17 @@ impl App {
         let framebuffers = vkc::create_framebuffers(&device, &render_pass,
             &image_views, swapchain.extent().clone())?;
         let command_pool = CommandPool::new(device.clone(), &surface, queue_family_flags)?;
+        let texture_image = create_texture_image(&device, &command_pool)?;
+        let texture_image_view = create_texture_image_view(device.clone(),
+            &texture_image)?;
+        let texture_sampler = create_texture_sampler(device.clone())?;
         let vertex_buffer = create_vertex_buffer(&device, &command_pool)?;
         let index_buffer = create_index_buffer(&device, &command_pool)?;
         let uniform_buffer = create_uniform_buffer(&device, &command_pool,
             swapchain.extent().clone())?;
         let descriptor_pool = create_descriptor_pool(device.clone())?;
         let descriptor_set = create_descriptor_set(&device, &descriptor_set_layout,
-            &descriptor_pool, &uniform_buffer)?;
+            &descriptor_pool, &uniform_buffer, &texture_image_view, &texture_sampler)?;
         let command_buffers = vkc::create_command_buffers(&device, &command_pool, &render_pass,
             &graphics_pipeline, &framebuffers, swapchain.extent(),
             &vertex_buffer, &index_buffer,
@@ -316,14 +504,17 @@ impl App {
             graphics_pipeline: Some(graphics_pipeline),
             framebuffers: Some(framebuffers),
             command_pool,
-            command_buffers: Some(command_buffers),
-            image_available_semaphore,
-            render_finished_semaphore,
+            texture_image,
+            texture_image_view,
+            texture_sampler,
             vertex_buffer,
             index_buffer,
             uniform_buffer,
             descriptor_pool,
             descriptor_set,
+            command_buffers: Some(command_buffers),
+            image_available_semaphore,
+            render_finished_semaphore,
             start_time,
         })
     }
@@ -345,10 +536,11 @@ impl App {
     fn recreate_swapchain(&mut self, current_extent: vk::VkExtent2D) -> VkcResult<()> {
         unsafe { vkc::check(self.device.vk().core.vkDeviceWaitIdle(self.device.handle())); }
 
-        // TODO: Look into using the  `oldSwapChain` field in the
-        // `SwapchainCreateInfoKHR` to recreate in-flight.
-        self.swapchain = Some(Swapchain::new(self.surface.clone(), self.device.clone(),
+        let swapchain = Some(Swapchain::new(self.surface.clone(), self.device.clone(),
             self.queue_family_flags, Some(current_extent), self.swapchain.take())?);
+        self.cleanup_swapchain();
+        self.swapchain = swapchain;
+
         self.image_views = Some(vkc::create_image_views(self.swapchain.as_ref().unwrap())?);
         self.render_pass = Some(RenderPass::new(self.device.clone(),
             self.swapchain.as_ref().unwrap().image_format())?);
@@ -387,7 +579,6 @@ impl App {
             view: (view * scale).into(),
             proj: proj.into(),
         };
-
 
         let mut data = ptr::null_mut();
         unsafe {

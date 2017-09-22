@@ -18,5 +18,6 @@ libloading = "*"
 smallvec = "*"
 vks = { path = "../vks", features = ["proc_addr_loader_glob_functions"] }
 libc = "*"
-nalgebra = "*"
+# nalgebra = "*"
 cgmath = "*"
+image = "*"

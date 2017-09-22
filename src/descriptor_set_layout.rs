@@ -17,7 +17,6 @@ pub struct DescriptorSetLayout {
 
 impl DescriptorSetLayout {
     pub fn new(device: Device) -> VkcResult<DescriptorSetLayout> {
-
         let ubo_layout_binding = vk::VkDescriptorSetLayoutBinding {
             binding: 0,
             descriptorType: vk::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -26,12 +25,22 @@ impl DescriptorSetLayout {
             pImmutableSamplers: ptr::null(),
         };
 
+        let sampler_layout_binding = vk::VkDescriptorSetLayoutBinding {
+            binding: 1,
+            descriptorType: vk::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            descriptorCount: 1,
+            stageFlags: vk::VK_SHADER_STAGE_FRAGMENT_BIT,
+            pImmutableSamplers: ptr::null(),
+        };
+
+        let bindings = [ubo_layout_binding, sampler_layout_binding];
+
         let create_info = vk::VkDescriptorSetLayoutCreateInfo {
             sType: vk::VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
-            bindingCount: 1,
-            pBindings: &ubo_layout_binding,
+            bindingCount: bindings.len() as u32,
+            pBindings: bindings.as_ptr(),
         };
 
         let mut handle = 0;

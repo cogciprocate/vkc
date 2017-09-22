@@ -85,7 +85,8 @@ unsafe fn device_is_suitable(instance: &Instance, surface: &Surface, device: vk:
 
     queue::queue_families(instance, surface, device, queue_flags).is_complete() &&
         extensions_supported &&
-        swap_chain_adequate
+        swap_chain_adequate &&
+        device_features.samplerAnisotropy != 0
 }
 
 pub fn choose_physical_device(instance: &Instance, surface: &Surface, queue_flags: vk::VkQueueFlags)
@@ -130,7 +131,8 @@ fn device_features_none() -> vk::VkPhysicalDeviceFeatures {
         largePoints: vk::VK_FALSE,
         alphaToOne: vk::VK_FALSE,
         multiViewport: vk::VK_FALSE,
-        samplerAnisotropy: vk::VK_FALSE,
+        // samplerAnisotropy: vk::VK_FALSE,
+        samplerAnisotropy: vk::VK_TRUE,
         textureCompressionETC2: vk::VK_FALSE,
         textureCompressionASTC_LDR: vk::VK_FALSE,
         textureCompressionBC: vk::VK_FALSE,

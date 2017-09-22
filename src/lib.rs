@@ -4,12 +4,13 @@
 
 extern crate libloading as lib;
 extern crate smallvec;
-extern crate nalgebra;
+// extern crate nalgebra;
 // extern crate cgmath;
 extern crate vks;
 extern crate libc;
 pub extern crate winit;
 
+mod error;
 mod version;
 mod loader;
 mod instance;
@@ -26,6 +27,8 @@ mod command_pool;
 mod command_buffers;
 mod semaphore;
 mod buffer;
+mod image;
+mod sampler;
 mod device_memory;
 mod descriptor_set_layout;
 mod descriptor_pool;
@@ -65,10 +68,11 @@ use std::mem;
 use std::ptr;
 use winit::{EventsLoop, WindowBuilder, Window, CreationError, ControlFlow, Event, WindowEvent};
 use loader::Loader;
-use nalgebra::Matrix4;
+// use nalgebra::Matrix4;
 // pub use vulkan_h as vk;
 // pub use vks::core as vkscore;
 // use vk::*;
+pub use error::Error;
 pub use version::Version;
 pub use instance::Instance;
 pub use device::Device;
@@ -85,11 +89,14 @@ pub use command_pool::CommandPool;
 pub use command_buffers::create_command_buffers;
 pub use semaphore::Semaphore;
 pub use buffer::Buffer;
+pub use image::Image;
+pub use sampler::Sampler;
 pub use device_memory::DeviceMemory;
 pub use descriptor_set_layout::DescriptorSetLayout;
 pub use descriptor_pool::DescriptorPool;
 
-pub type VkcResult<T> = Result<T, ()>;
+
+pub type VkcResult<T> = Result<T, Error>;
 
 #[cfg(debug_assertions)]
 pub const ENABLE_VALIDATION_LAYERS: bool = true;
@@ -104,10 +111,33 @@ macro_rules! offset_of {
     }
 }
 
+
+
+pub fn find_memory_type(device: &Device, type_filter: u32, properties: vk::VkMemoryPropertyFlags) -> u32 {
+    let mut mem_properties: vk::VkPhysicalDeviceMemoryProperties;
+    unsafe {
+        mem_properties = mem::uninitialized();
+        device.instance().vk().core.vkGetPhysicalDeviceMemoryProperties(device.physical_device(),
+            &mut mem_properties);
+    }
+
+    for i in 0..mem_properties.memoryTypeCount {
+        if (type_filter & (1 << i)) != 0 &&
+            (mem_properties.memoryTypes[i as usize].propertyFlags & properties) == properties
+        {
+            return i;
+        }
+    }
+    panic!("Failed to find suitable memory type.");
+}
+
+
+
 #[repr(C)]
 pub struct Vertex {
     pub pos: [f32; 2],
     pub color: [f32; 3],
+    pub tex_coord: [f32; 2],
 }
 
 impl Vertex {
@@ -123,19 +153,25 @@ impl Vertex {
         }
     }
 
-    pub fn attribute_descriptions() -> [vk::VkVertexInputAttributeDescription; 2] {
+    pub fn attribute_descriptions() -> [vk::VkVertexInputAttributeDescription; 3] {
         [
             vk::VkVertexInputAttributeDescription {
-                location: 0,
                 binding: 0,
+                location: 0,
                 format: vk::VK_FORMAT_R32G32_SFLOAT,
                 offset: offset_of!(Vertex, pos),
             },
             vk::VkVertexInputAttributeDescription {
-                location: 1,
                 binding: 0,
+                location: 1,
                 format: vk::VK_FORMAT_R32G32B32_SFLOAT,
                 offset: offset_of!(Vertex, color),
+            },
+            vk::VkVertexInputAttributeDescription {
+                binding: 0,
+                location: 2,
+                format: vk::VK_FORMAT_R32G32_SFLOAT,
+                offset: offset_of!(Vertex, tex_coord),
             },
         ]
     }

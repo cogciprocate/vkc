@@ -17,10 +17,16 @@ pub struct DescriptorPool {
 
 impl DescriptorPool {
     pub fn new(device: Device) -> VkcResult<DescriptorPool> {
-        let pool_size = vk::VkDescriptorPoolSize {
-            type_: vk::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            descriptorCount: 1,
-        };
+        let pool_sizes = [
+            vk::VkDescriptorPoolSize {
+                type_: vk::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                descriptorCount: 1,
+            },
+            vk::VkDescriptorPoolSize {
+                type_: vk::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                descriptorCount: 1,
+            },
+        ];
 
         let create_info = vk::VkDescriptorPoolCreateInfo {
             sType: vk::VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -30,8 +36,8 @@ impl DescriptorPool {
             // `VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT`:
             flags: 0,
             maxSets: 1,
-            poolSizeCount: 1,
-            pPoolSizes: &pool_size,
+            poolSizeCount: pool_sizes.len() as u32,
+            pPoolSizes: pool_sizes.as_ptr(),
         };
 
         let mut handle = 0;

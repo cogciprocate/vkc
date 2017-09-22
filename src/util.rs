@@ -24,6 +24,14 @@ pub fn read_file<P: AsRef<Path>>(file: P) -> VkcResult<Vec<u8>> {
     Ok(contents)
 }
 
+pub fn file_reader<P: AsRef<Path>>(file: P) -> VkcResult<BufReader<File>> {
+    let file_name = file.as_ref().display().to_string();
+    let f = File::open(file).expect("file not found");
+    let file_bytes = f.metadata().unwrap().len() as usize;
+    // let mut contents = Vec::<u8>::with_capacity(file_bytes);
+    Ok(BufReader::new(f))
+}
+
 
 /// Returns a column-major perspective matrix.
 pub fn persp_matrix(width: u32, height: u32, fov_zoom: f32) -> [[f32; 4]; 4] {
