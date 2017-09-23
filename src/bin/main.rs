@@ -3,10 +3,14 @@
 extern crate vkc;
 extern crate cgmath;
 extern crate image;
+// extern crate winit;
+extern crate tobj;
 
 use std::mem;
 use std::ptr;
 use std::time;
+use std::path::Path;
+use std::collections::HashMap;
 use image::{ImageFormat, DynamicImage};
 use cgmath::{SquareMatrix, One, Rotation, Rotation3, Basis3, Matrix3, Matrix4, Vector3};
 use vkc::winit::{EventsLoop, WindowBuilder, Window, Event, WindowEvent};
@@ -15,8 +19,11 @@ use vkc::{vk, util, device, VkcResult, Version, Instance, Device, Surface, Swapc
     Buffer, DeviceMemory, Vertex, DescriptorSetLayout, UniformBufferObject, DescriptorPool,
     Image, Sampler};
 
+static MODEL_PATH: &str = "/src/shared_assets/models/chalet.obj";
+static TEXTURE_PATH: &str = "/src/shared_assets/textures/chalet.jpg";
+// static TEXTURE_PATH: &str = "/src/vkc/textures/texture.jpg";
 
-const VERTICES: [Vertex; 8] =  [
+const VERTICES_UNUSED: [Vertex; 8] =  [
     Vertex { pos: [-0.5, -0.5, 0.0], color: [1.0, 0.0, 0.0], tex_coord: [1.0, 0.0]},
     Vertex { pos: [0.5, -0.5, 0.0], color: [0.0, 1.0, 0.0], tex_coord: [0.0, 0.0] },
     Vertex { pos: [0.5, 0.5, 0.0], color: [0.0, 0.0, 1.0], tex_coord: [0.0, 1.0] },
@@ -27,7 +34,7 @@ const VERTICES: [Vertex; 8] =  [
     Vertex { pos: [-0.5, 0.5, -0.5], color: [1.0, 1.0, 1.0], tex_coord: [1.0, 1.0] },
 ];
 
-const INDICES: [u16; 12] = [
+const INDICES_UNUSED: [u32; 12] = [
     0, 1, 2, 2, 3, 0,
     4, 5, 6, 6, 7, 4
 ];
@@ -242,8 +249,6 @@ fn copy_buffer_to_image(device: &Device, command_pool: &CommandPool, buffer: &Bu
 fn copy_buffer(device: &Device, command_pool: &CommandPool, src_buffer: &Buffer,
         dst_buffer: &Buffer, size: vk::VkDeviceSize)  -> VkcResult<()>
 {
-    // unsafe { device.vk().core.vkBeginCommandBuffer(command_buffer, &begin_info); }
-
     // TODO: Look into creating a separate command pool with the
     // `VK_COMMAND_POOL_CREATE_TRANSIENT_BIT` flag for short lived command
     // buffers like this.
@@ -261,9 +266,58 @@ fn copy_buffer(device: &Device, command_pool: &CommandPool, src_buffer: &Buffer,
     end_single_time_commands(device, command_pool, command_buffer)
 }
 
-fn create_vertex_buffer(device: &Device, command_pool: &CommandPool) -> VkcResult<Buffer> {
+fn load_model(device: &Device) -> VkcResult<(Vec<Vertex>, Vec<u32>)> {
+    let (models, materials) = tobj::load_obj(&Path::new(MODEL_PATH))
+        .expect("Error loading model");
+
+    let mut vertices = Vec::with_capacity(4096);
+    let mut indices = Vec::with_capacity(4096);
+
+    let mut unique_vertices: HashMap<Vertex, u32> = HashMap::with_capacity(1 << 20);
+
+    let mut mesh_id = 0usize;
+    for model in models {
+        let mesh = &model.mesh;
+        for &index in &mesh.indices {
+            let index = index as usize;
+
+            let vert_idz = 3 * index;
+            let tex_coord_idz = 2 * index;
+
+            let pos = [
+                mesh.positions[vert_idz],
+                mesh.positions[vert_idz + 1],
+                mesh.positions[vert_idz + 2],
+            ];
+
+            let tex_coord = [
+                mesh.texcoords[tex_coord_idz],
+                1.0 - mesh.texcoords[tex_coord_idz + 1],
+            ];
+
+            let vertex = Vertex {
+                pos,
+                color: [1.0, 1.0, 1.0],
+                tex_coord,
+            };
+
+            if !unique_vertices.contains_key(&vertex) {
+                unique_vertices.insert(vertex.clone(), vertices.len() as u32);
+                vertices.push(vertex.clone());
+            }
+
+            indices.push(unique_vertices[&vertex]);
+        }
+        mesh_id += 1;
+    }
+    Ok((vertices, indices))
+}
+
+fn create_vertex_buffer(device: &Device, command_pool: &CommandPool, vertices: &[Vertex])
+        -> VkcResult<Buffer>
+{
     // let buffer_bytes = (mem::size_of_val(&VERTICES[0]) * VERTICES.len()) as u64;
-    let buffer_bytes = (mem::size_of::<[Vertex; 4]>() * VERTICES.len()) as u64;
+    let buffer_bytes = (mem::size_of::<[Vertex; 4]>() * vertices.len()) as u64;
 
     let staging_buffer = Buffer::new(device.clone(), buffer_bytes,
         vk::VK_BUFFER_USAGE_TRANSFER_SRC_BIT, vk::VK_SHARING_MODE_EXCLUSIVE,
@@ -273,8 +327,7 @@ fn create_vertex_buffer(device: &Device, command_pool: &CommandPool) -> VkcResul
     unsafe {
         vkc::check(device.vk().core.vkMapMemory(device.handle(),
             staging_buffer.device_memory().handle(), 0, buffer_bytes, 0, &mut data));
-        // println!("##### VBO data (ptr): {:?}", data);
-        ptr::copy_nonoverlapping(&VERTICES, data as *mut _, buffer_bytes as usize);
+        ptr::copy_nonoverlapping(vertices.as_ptr(), data as *mut _, vertices.len());
         device.vk().core.vkUnmapMemory(device.handle(), staging_buffer.device_memory().handle());
     }
 
@@ -291,8 +344,10 @@ fn create_vertex_buffer(device: &Device, command_pool: &CommandPool) -> VkcResul
     Ok(vertex_buffer)
 }
 
-fn create_index_buffer(device: &Device, command_pool: &CommandPool) -> VkcResult<Buffer> {
-    let buffer_bytes = (mem::size_of::<u16>() * INDICES.len()) as u64;
+fn create_index_buffer<T>(device: &Device, command_pool: &CommandPool, indices: &[T])
+        -> VkcResult<Buffer>
+{
+    let buffer_bytes = (mem::size_of::<T>() * indices.len()) as u64;
 
     let staging_buffer = Buffer::new(device.clone(), buffer_bytes,
         vk::VK_BUFFER_USAGE_TRANSFER_SRC_BIT, vk::VK_SHARING_MODE_EXCLUSIVE,
@@ -302,7 +357,7 @@ fn create_index_buffer(device: &Device, command_pool: &CommandPool) -> VkcResult
         let mut data = ptr::null_mut();
         vkc::check(device.vk().core.vkMapMemory(device.handle(),
             staging_buffer.device_memory().handle(), 0, buffer_bytes, 0, &mut data));
-        ptr::copy_nonoverlapping(&INDICES, data as *mut _, buffer_bytes as usize);
+        ptr::copy_nonoverlapping(indices.as_ptr(), data as *mut _, indices.len());
         device.vk().core.vkUnmapMemory(device.handle(), staging_buffer.device_memory().handle());
     }
 
@@ -378,7 +433,7 @@ fn create_depth_resources(device: &Device, command_pool: &CommandPool,
 }
 
 fn create_texture_image(device: &Device, command_pool: &CommandPool) -> VkcResult<Image> {
-    let pixels = image::open("/src/vkc/textures/texture.jpg").unwrap().to_rgba();
+    let pixels = image::open(TEXTURE_PATH).unwrap().to_rgba();
     let (tex_width, tex_height) = pixels.dimensions();
     let image_bytes = (tex_width * tex_height * 4) as u64;
 
@@ -520,10 +575,14 @@ struct App {
     surface: Surface,
     descriptor_set_layout: DescriptorSetLayout,
     pipeline_layout: PipelineLayout,
+    vert_shader_code: Vec<u8>,
+    frag_shader_code: Vec<u8>,
     command_pool: CommandPool,
     texture_image: Image,
     texture_image_view: ImageView,
     texture_sampler: Sampler,
+    vertices: Vec<Vertex>,
+    indices: Vec<u32>,
     vertex_buffer: Buffer,
     index_buffer: Buffer,
     uniform_buffer: Buffer,
@@ -553,8 +612,10 @@ impl App {
         let render_pass = create_render_pass(device.clone(), swapchain.image_format())?;
         let descriptor_set_layout = create_descriptor_set_layout(device.clone())?;
         let pipeline_layout = PipelineLayout::new(device.clone(), Some(&descriptor_set_layout))?;
+        let vert_shader_code = util::read_file("/src/vkc/shaders/vert.spv")?;
+        let frag_shader_code = util::read_file("/src/vkc/shaders/frag.spv")?;
         let graphics_pipeline = GraphicsPipeline::new(device.clone(), &pipeline_layout,
-            &render_pass, swapchain.extent().clone())?;
+            &render_pass, swapchain.extent().clone(), &vert_shader_code, &frag_shader_code)?;
         let command_pool = CommandPool::new(device.clone(), &surface, queue_family_flags)?;
         let (depth_image, depth_image_view) = create_depth_resources(&device, &command_pool,
             swapchain.extent().clone())?;
@@ -564,8 +625,9 @@ impl App {
         let texture_image_view = create_texture_image_view(device.clone(),
             &texture_image)?;
         let texture_sampler = create_texture_sampler(device.clone())?;
-        let vertex_buffer = create_vertex_buffer(&device, &command_pool)?;
-        let index_buffer = create_index_buffer(&device, &command_pool)?;
+        let (vertices, indices) = load_model(&device)?;
+        let vertex_buffer = create_vertex_buffer(&device, &command_pool, &vertices)?;
+        let index_buffer = create_index_buffer(&device, &command_pool, &indices)?;
         let uniform_buffer = create_uniform_buffer(&device, &command_pool,
             swapchain.extent().clone())?;
         let descriptor_pool = create_descriptor_pool(device.clone())?;
@@ -574,7 +636,7 @@ impl App {
         let command_buffers = vkc::create_command_buffers(&device, &command_pool, &render_pass,
             &graphics_pipeline, &framebuffers, swapchain.extent(),
             &vertex_buffer, &index_buffer,
-            VERTICES.len() as u32, INDICES.len() as u32, &pipeline_layout, descriptor_set)?;
+            vertices.len() as u32, vertices.len() as u32, &pipeline_layout, descriptor_set)?;
         let image_available_semaphore = Semaphore::new(device.clone())?;
         let render_finished_semaphore = Semaphore::new(device.clone())?;
         let start_time = time::Instant::now();
@@ -597,10 +659,14 @@ impl App {
             surface: surface,
             descriptor_set_layout,
             pipeline_layout,
+            vert_shader_code,
+            frag_shader_code,
             command_pool,
             texture_image,
             texture_image_view,
             texture_sampler,
+            vertices: vertices,
+            indices: indices,
             vertex_buffer,
             index_buffer,
             uniform_buffer,
@@ -640,7 +706,7 @@ impl App {
             swapchain.image_format())?;
         let graphics_pipeline = GraphicsPipeline::new(self.device.clone(),
             &self.pipeline_layout, &render_pass,
-            swapchain.extent().clone())?;
+            swapchain.extent().clone(), &self.vert_shader_code, &self.frag_shader_code)?;
         let (depth_image, depth_image_view) = create_depth_resources(&self.device,
             &self.command_pool, swapchain.extent().clone())?;
         let framebuffers = vkc::create_framebuffers(&self.device,
@@ -649,8 +715,8 @@ impl App {
         let command_buffers = vkc::create_command_buffers(&self.device, &self.command_pool,
             &render_pass, &graphics_pipeline,
             &framebuffers, swapchain.extent(),
-            &self.vertex_buffer, &self.index_buffer, VERTICES.len() as u32,
-            INDICES.len() as u32, &self.pipeline_layout, self.descriptor_set)?;
+            &self.vertex_buffer, &self.index_buffer, self.vertices.len() as u32,
+            self.indices.len() as u32, &self.pipeline_layout, self.descriptor_set)?;
 
         self.swapchain = Some(swapchain);
         self.swapchain_components = Some(SwapchainComponents {

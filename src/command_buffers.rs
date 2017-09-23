@@ -120,8 +120,10 @@ pub fn create_command_buffers(device: &Device, command_pool: &CommandPool,
             let offsets = [0];
             device.vk().core.vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers.as_ptr(),
                 offsets.as_ptr());
+            // device.vk().core.vkCmdBindIndexBuffer(command_buffer, index_buffer.handle(), 0,
+            //     vk::VK_INDEX_TYPE_UINT16);
             device.vk().core.vkCmdBindIndexBuffer(command_buffer, index_buffer.handle(), 0,
-                vk::VK_INDEX_TYPE_UINT16);
+                vk::VK_INDEX_TYPE_UINT32);
 
             device.vk().core.vkCmdBindDescriptorSets(command_buffer,
                 vk::VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout.handle(), 0, 1,

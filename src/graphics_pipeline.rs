@@ -7,6 +7,7 @@ use vks;
 use ::{util, VkcResult, Device, ShaderModule, PipelineLayout, RenderPass, Vertex};
 
 
+
 #[derive(Debug)]
 struct Inner {
     handle: vk::VkPipeline,
@@ -20,13 +21,11 @@ pub struct GraphicsPipeline {
 
 impl GraphicsPipeline {
     pub fn new(device: Device, pipeline_layout: &PipelineLayout,
-            render_pass: &RenderPass, swap_chain_extent: vk::VkExtent2D) -> VkcResult<GraphicsPipeline>
+            render_pass: &RenderPass, swap_chain_extent: vk::VkExtent2D, vert_shader_code: &[u8],
+            frag_shader_code: &[u8]) -> VkcResult<GraphicsPipeline>
     {
-        let vert_shader_code = util::read_file("/src/vkc/shaders/vert.spv")?;
-        let frag_shader_code = util::read_file("/src/vkc/shaders/frag.spv")?;
-
-        let vert_shader_module = ShaderModule::new(device.clone(), &vert_shader_code)?;
-        let frag_shader_module = ShaderModule::new(device.clone(), &frag_shader_code)?;
+        let vert_shader_module = ShaderModule::new(device.clone(), vert_shader_code)?;
+        let frag_shader_module = ShaderModule::new(device.clone(), frag_shader_code)?;
 
         let fn_name = unsafe { CStr::from_bytes_with_nul_unchecked(b"main\0") };
 

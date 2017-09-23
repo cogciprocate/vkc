@@ -8,6 +8,8 @@ extern crate smallvec;
 // extern crate cgmath;
 extern crate vks;
 extern crate libc;
+extern crate tobj;
+extern crate ordered_float;
 pub extern crate winit;
 
 mod error;
@@ -63,11 +65,13 @@ pub mod device;
 pub mod util;
 
 use std::ffi::OsStr;
+use std::hash::{Hash, Hasher};
 use libc::c_void;
 use std::mem;
 use std::ptr;
 use winit::{EventsLoop, WindowBuilder, Window, CreationError, ControlFlow, Event, WindowEvent};
 use loader::Loader;
+use ordered_float::OrderedFloat;
 // use nalgebra::Matrix4;
 // pub use vulkan_h as vk;
 // pub use vks::core as vkscore;
@@ -133,6 +137,7 @@ pub fn find_memory_type(device: &Device, type_filter: u32, properties: vk::VkMem
 
 
 
+#[derive(Clone)]
 #[repr(C)]
 pub struct Vertex {
     pub pos: [f32; 3],
@@ -176,6 +181,27 @@ impl Vertex {
         ]
     }
 }
+
+impl Hash for Vertex {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let pos = [OrderedFloat(self.pos[0]), OrderedFloat(self.pos[1]),
+            OrderedFloat(self.pos[2])];
+        let color = [OrderedFloat(self.color[0]), OrderedFloat(self.color[1]),
+            OrderedFloat(self.color[2])];
+        let tex_coord = [OrderedFloat(self.tex_coord[0]), OrderedFloat(self.tex_coord[1])];
+        pos.hash(state);
+        color.hash(state);
+        tex_coord.hash(state);
+    }
+}
+
+impl PartialEq for Vertex {
+    fn eq(&self, other: &Vertex) -> bool {
+        self.pos == other.pos && self.color == other.color && self.tex_coord == other.tex_coord
+    }
+}
+
+impl Eq for Vertex {}
 
 // #[derive(Debug)]
 // pub struct UniformBufferObject {
