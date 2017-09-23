@@ -1,6 +1,7 @@
 
 use std::sync::Arc;
 use std::ptr;
+use smallvec::SmallVec;
 use vk;
 use vks;
 use ::{util, VkcResult, Device, RenderPass, ImageView};
@@ -11,7 +12,7 @@ struct Inner {
     handle: vk::VkFramebuffer,
     device: Device,
     render_pass: RenderPass,
-    image_view: ImageView,
+    attachments: SmallVec<[ImageView; 8]>,
 }
 
 #[derive(Debug, Clone)]
@@ -20,21 +21,27 @@ pub struct Framebuffer {
 }
 
 impl Framebuffer {
-    pub fn new(device: Device, render_pass: RenderPass, image_view: ImageView,
-            swapchain_extent: vk::VkExtent2D) -> VkcResult<Framebuffer>
+    pub fn new(device: Device, render_pass: RenderPass, swapchain_image_view: ImageView,
+            depth_image_view: ImageView, swapchain_extent: vk::VkExtent2D) -> VkcResult<Framebuffer>
     {
-        let attachments = [image_view.handle()];
+        let attachment_handles = [swapchain_image_view.handle(),
+            depth_image_view.handle()];
+
         let create_info = vk::VkFramebufferCreateInfo {
             sType: vk::VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
             renderPass: render_pass.handle(),
-            attachmentCount: 1,
-            pAttachments: attachments.as_ptr(),
+            attachmentCount: attachment_handles.len() as u32,
+            pAttachments: attachment_handles.as_ptr(),
             width: swapchain_extent.width,
             height: swapchain_extent.height,
             layers: 1,
         };
+
+        let mut attachments = SmallVec::new();
+        attachments.push(swapchain_image_view);
+        attachments.push(depth_image_view);
 
         let mut handle = 0;
         unsafe {
@@ -47,7 +54,7 @@ impl Framebuffer {
                 handle,
                 device,
                 render_pass,
-                image_view,
+                attachments,
             })
         })
     }
@@ -71,11 +78,11 @@ impl Drop for Inner {
 
 
 pub fn create_framebuffers(device: &Device, render_pass: &RenderPass,
-        swapchain_image_views: &[ImageView], swapchain_extent: vk::VkExtent2D)
-        -> VkcResult<Vec<Framebuffer>>
+        swapchain_image_views: &[ImageView], depth_image_view: &ImageView,
+        swapchain_extent: vk::VkExtent2D) -> VkcResult<Vec<Framebuffer>>
 {
     swapchain_image_views.iter().map(|image_view| {
         Framebuffer::new(device.clone(), render_pass.clone(), image_view.clone(),
-            swapchain_extent.clone())
+            depth_image_view.clone(), swapchain_extent.clone())
     }).collect::<Result<Vec<_>, _>>()
 }

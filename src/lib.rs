@@ -135,7 +135,7 @@ pub fn find_memory_type(device: &Device, type_filter: u32, properties: vk::VkMem
 
 #[repr(C)]
 pub struct Vertex {
-    pub pos: [f32; 2],
+    pub pos: [f32; 3],
     pub color: [f32; 3],
     pub tex_coord: [f32; 2],
 }
@@ -158,7 +158,7 @@ impl Vertex {
             vk::VkVertexInputAttributeDescription {
                 binding: 0,
                 location: 0,
-                format: vk::VK_FORMAT_R32G32_SFLOAT,
+                format: vk::VK_FORMAT_R32G32B32_SFLOAT,
                 offset: offset_of!(Vertex, pos),
             },
             vk::VkVertexInputAttributeDescription {

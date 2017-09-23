@@ -139,6 +139,31 @@ impl GraphicsPipeline {
             alphaToOneEnable: vk::VK_FALSE,
         };
 
+        let stencil_op_state = vk::VkStencilOpState {
+            failOp: 0,
+            passOp: 0,
+            depthFailOp: 0,
+            compareOp: 0,
+            compareMask: 0,
+            writeMask: 0,
+            reference: 0,
+        };
+
+        let depth_stencil = vk::VkPipelineDepthStencilStateCreateInfo {
+            sType: vk::VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+            pNext: ptr::null(),
+            flags: 0,
+            depthTestEnable: vk::VK_TRUE,
+            depthWriteEnable: vk::VK_TRUE,
+            depthCompareOp: vk::VK_COMPARE_OP_LESS,
+            depthBoundsTestEnable: vk::VK_FALSE,
+            stencilTestEnable: vk::VK_FALSE,
+            front: stencil_op_state.clone(),
+            back: stencil_op_state,
+            minDepthBounds: 0.0,
+            maxDepthBounds: 1.0,
+        };
+
         let color_blend_attachment = vk::VkPipelineColorBlendAttachmentState {
             blendEnable: vk::VK_FALSE,
             srcColorBlendFactor: vk::VK_BLEND_FACTOR_ONE,
@@ -200,7 +225,7 @@ impl GraphicsPipeline {
             pViewportState: &viewport_state,
             pRasterizationState: &rasterizer,
             pMultisampleState: &multisampling,
-            pDepthStencilState: ptr::null(),
+            pDepthStencilState: &depth_stencil,
             pColorBlendState: &color_blending,
             // pDynamicState: &dynamic_state,
             pDynamicState: ptr::null(),

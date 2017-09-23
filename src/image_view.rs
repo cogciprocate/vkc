@@ -19,7 +19,8 @@ pub struct ImageView {
 }
 
 impl ImageView {
-    pub fn new(device: Device, swapchain: Option<Swapchain>, image: vk::VkImage, format: vk::VkFormat)
+    pub fn new(device: Device, swapchain: Option<Swapchain>, image: vk::VkImage,
+            format: vk::VkFormat, aspect_flags: vk::VkImageAspectFlags)
             -> VkcResult<ImageView>
     {
         let create_info = vk::VkImageViewCreateInfo {
@@ -36,7 +37,8 @@ impl ImageView {
                 a: vk::VK_COMPONENT_SWIZZLE_IDENTITY,
             },
             subresourceRange: vk::VkImageSubresourceRange {
-                aspectMask: vk::VK_IMAGE_ASPECT_COLOR_BIT,
+                // aspectMask: vk::VK_IMAGE_ASPECT_COLOR_BIT,
+                aspectMask: aspect_flags,
                 baseMipLevel: 0,
                 levelCount: 1,
                 baseArrayLayer: 0,
@@ -81,6 +83,7 @@ impl Drop for Inner {
 
 pub fn create_image_views(swapchain: &Swapchain) -> VkcResult<Vec<ImageView>> {
     swapchain.images().iter().map(|&image| {
-        ImageView::new(swapchain.device().clone(), Some(swapchain.clone()), image, swapchain.image_format())
+        ImageView::new(swapchain.device().clone(), Some(swapchain.clone()), image,
+            swapchain.image_format(), vk::VK_IMAGE_ASPECT_COLOR_BIT)
     }).collect::<Result<Vec<_>, _>>()
 }

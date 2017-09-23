@@ -88,9 +88,14 @@ pub fn create_command_buffers(device: &Device, command_pool: &CommandPool,
             ::check(device.vk().core.vkBeginCommandBuffer(command_buffer, &begin_info));
         }
 
-        let clear_color = vk::VkClearValue {
-            color: vk::VkClearColorValue { float32: [0.0f32, 0.0f32, 0.0f32, 1.0f32] }
-        };
+        // let clear_color = vk::VkClearValue {
+        //     color: vk::VkClearColorValue { float32: [0.0f32, 0.0f32, 0.0f32, 1.0f32] }
+        // };
+
+        let clear_values = [
+            vk::VkClearValue { color: vk::VkClearColorValue { float32: [0.0f32, 0.0f32, 0.0f32, 1.0f32] } },
+            vk::VkClearValue { depthStencil: vk::VkClearDepthStencilValue { depth: 1.0, stencil: 0, } },
+        ];
 
         let render_pass_info = vk::VkRenderPassBeginInfo {
             sType: vk::VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -101,8 +106,8 @@ pub fn create_command_buffers(device: &Device, command_pool: &CommandPool,
                 offset: vk::VkOffset2D { x: 0, y: 0, },
                 extent: swapchain_extent.clone(),
             },
-            clearValueCount: 1,
-            pClearValues: &clear_color,
+            clearValueCount: clear_values.len() as u32,
+            pClearValues: clear_values.as_ptr(),
         };
 
         unsafe {
