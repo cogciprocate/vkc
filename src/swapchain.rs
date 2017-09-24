@@ -84,7 +84,8 @@ fn choose_swap_surface_format(available_formats: &[vks::khr_surface::VkSurfaceFo
 fn choose_swap_present_mode(available_present_modes: &[vks::khr_surface::VkPresentModeKHR]) -> vks::khr_surface::VkPresentModeKHR {
     let mut best_mode = vks::khr_surface::VK_PRESENT_MODE_FIFO_KHR;
     for &available_present_mode in available_present_modes {
-        if available_present_mode == vks::khr_surface::VK_PRESENT_MODE_MAILBOX_KHR {
+        // if available_present_mode == vks::khr_surface::VK_PRESENT_MODE_MAILBOX_KHR {
+        if available_present_mode == vks::khr_surface::VK_PRESENT_MODE_FIFO_KHR {
             return available_present_mode;
         } else if available_present_mode == vks::khr_surface::VK_PRESENT_MODE_IMMEDIATE_KHR {
             best_mode = available_present_mode;
@@ -141,7 +142,7 @@ impl Swapchain {
         // TODO: REVISIT THIS: https://vulkan-tutorial.com/Drawing_a_triangle/Presentation/Swap_chain
         let mut image_count = swapchain_details.capabilities.minImageCount + 1;
         if swapchain_details.capabilities.maxImageCount > 0 &&
-            image_count > swapchain_details.capabilities.maxImageCount
+                image_count > swapchain_details.capabilities.maxImageCount
         {
             image_count = swapchain_details.capabilities.maxImageCount;
         }
